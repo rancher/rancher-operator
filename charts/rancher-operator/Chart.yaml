@@ -1,0 +1,11 @@
+apiVersion: v2
+name: rancher-operator
+description: Control a Rancher server using GitOps
+version: 0.0.0
+appVersion: 0.0.0
+annotations:
+  catalog.cattle.io/auto-install-gvr: clusters.rancher.cattle.io/v1
+  catalog.cattle.io/certified: rancher
+  catalog.cattle.io/experimental: "true"
+  catalog.cattle.io/namespace: rancher-operator-system
+  catalog.cattle.io/release-name: rancher-operator

@@ -1,0 +1,4 @@
+image:
+  repository: rancher/rancher-operator
+  tag: latest
+  imagePullPolicy: Always

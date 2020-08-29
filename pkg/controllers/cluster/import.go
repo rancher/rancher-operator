@@ -71,7 +71,7 @@ func (h *handler) deployAgent(cluster *v1.Cluster, status v1.ClusterStatus) (boo
 		return false, nil
 	}
 
-	return true, h.deploy(cluster.Namespace, cluster.Spec.ImportedConfig.KubeconfigSecret, tokenValue)
+	return true, h.deploy(cluster.Namespace, cluster.Spec.ImportedConfig.KubeConfigSecret, tokenValue)
 }
 
 func (h *handler) deploy(secretNamespace, secretName string, token string) error {

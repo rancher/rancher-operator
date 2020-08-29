@@ -5,16 +5,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rancher/rancher-operator/pkg/settings"
-
-	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
-
+	"github.com/rancher/norman/types/convert"
 	v1 "github.com/rancher/rancher-operator/pkg/apis/rancher.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/clients"
 	mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
 	rocontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/rancher.cattle.io/v1"
+	"github.com/rancher/rancher-operator/pkg/settings"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/condition"
+	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/rancher/wrangler/pkg/kstatus"
 	"github.com/rancher/wrangler/pkg/name"
@@ -22,6 +21,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -172,7 +172,19 @@ func (h *handler) createCluster(cluster *v1.Cluster, status v1.ClusterStatus, sp
 		Spec: spec,
 	}
 
-	return h.updateStatus([]runtime.Object{newCluster}, cluster, status, newCluster)
+	// We do this so that we don't clobber status because the rancher object is pretty dirty and doesn't have a status subresource
+	data, err := convert.EncodeToMap(newCluster)
+	if err != nil {
+		return nil, status, err
+	}
+	data = map[string]interface{}{
+		"metadata": data["metadata"],
+		"spec":     data["spec"],
+	}
+	data["kind"] = "Cluster"
+	data["apiVersion"] = "management.cattle.io/v3"
+
+	return h.updateStatus([]runtime.Object{&unstructured.Unstructured{Object: data}}, cluster, status, newCluster)
 }
 
 func (h *handler) updateStatus(objs []runtime.Object, cluster *v1.Cluster, status v1.ClusterStatus, rCluster *v3.Cluster) ([]runtime.Object, v1.ClusterStatus, error) {
@@ -214,7 +226,7 @@ func (h *handler) getKubeConfig(cluster *v1.Cluster, status v1.ClusterStatus) (r
 		tokenValue = ""
 	)
 
-	if cluster.Spec.ImportedConfig != nil && cluster.Spec.ImportedConfig.KubeconfigSecret == name {
+	if cluster.Spec.ImportedConfig != nil && cluster.Spec.ImportedConfig.KubeConfigSecret == name {
 		return nil, nil
 	}
 

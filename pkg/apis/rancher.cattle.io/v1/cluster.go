@@ -39,7 +39,7 @@ type ClusterStatus struct {
 }
 
 type ImportedConfig struct {
-	KubeconfigSecret string `json:"kubeconfigSecret,omitempty"`
+	KubeConfigSecret string `json:"kubeConfigSecret,omitempty"`
 }
 
 type ReferencedConfig struct {

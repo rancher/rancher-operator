@@ -28,3 +28,4 @@ sed -i \
     build/charts/rancher-operator-crd/Chart.yaml
 
 helm package -d ./dist/artifacts ./build/charts/rancher-operator
+helm package -d ./dist/artifacts ./build/charts/rancher-operator-crd

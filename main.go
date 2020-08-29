@@ -1,6 +1,6 @@
 //go:generate go run pkg/codegen/cleanup/main.go
 //go:generate go run pkg/codegen/main.go
-//go:generate go run main.go --write-crds ./charts/rancher/crds/crds.yaml
+//go:generate go run main.go --write-crds ./charts/rancher-operator-crd/template/crds.yaml
 
 package main
 
@@ -56,7 +56,7 @@ func main() {
 
 func run(c *cli.Context) error {
 	if WriteCRDs != "" {
-		logrus.Info("Writing CRDS to", WriteCRDs)
+		logrus.Info("Writing CRDS to ", WriteCRDs)
 		return crd.WriteFile(WriteCRDs)
 	}
 

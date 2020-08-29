@@ -1,6 +1,6 @@
 apiVersion: v2
 name: rancher-operator
-description: Control a Rancher server using GitOps
+description: Control Rancher using GitOps
 version: 0.0.0
 appVersion: 0.0.0
 annotations:

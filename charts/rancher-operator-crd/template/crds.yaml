@@ -144,7 +144,7 @@ spec:
             importedConfig:
               nullable: true
               properties:
-                kubeconfigSecret:
+                kubeConfigSecret:
                   nullable: true
                   type: string
               type: object

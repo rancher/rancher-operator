@@ -33,6 +33,7 @@ type Interface interface {
 	Cluster() ClusterController
 	ClusterRegistrationToken() ClusterRegistrationTokenController
 	ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController
+	FleetWorkspace() FleetWorkspaceController
 	Project() ProjectController
 	ProjectRoleTemplateBinding() ProjectRoleTemplateBindingController
 	RoleTemplate() RoleTemplateController
@@ -59,6 +60,9 @@ func (c *version) ClusterRegistrationToken() ClusterRegistrationTokenController 
 }
 func (c *version) ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController {
 	return NewClusterRoleTemplateBindingController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "ClusterRoleTemplateBinding"}, "clusterroletemplatebindings", true, c.controllerFactory)
+}
+func (c *version) FleetWorkspace() FleetWorkspaceController {
+	return NewFleetWorkspaceController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "FleetWorkspace"}, "fleetworkspaces", false, c.controllerFactory)
 }
 func (c *version) Project() ProjectController {
 	return NewProjectController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}, "projects", true, c.controllerFactory)

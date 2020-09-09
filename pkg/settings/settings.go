@@ -1,6 +1,8 @@
 package settings
 
-import mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
+import (
+	mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
+)
 
 func GetServerURLAndCA(settings mgmtcontrollers.SettingCache) (string, string, error) {
 	server, err := settings.Get("server-url")
@@ -14,4 +16,12 @@ func GetServerURLAndCA(settings mgmtcontrollers.SettingCache) (string, string, e
 	}
 
 	return server.Value, cacert.Value, nil
+}
+
+func Get(settings mgmtcontrollers.SettingCache, key string) (string, error) {
+	server, err := settings.Get(key)
+	if err != nil {
+		return "", err
+	}
+	return server.Value, nil
 }

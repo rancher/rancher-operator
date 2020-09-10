@@ -1,6 +1,6 @@
 //go:generate go run pkg/codegen/cleanup/main.go
 //go:generate go run pkg/codegen/main.go
-//go:generate go run main.go --write-crds ./charts/rancher-operator-crd/template/crds.yaml
+//go:generate go run main.go --write-crds ./charts/rancher-operator-crd/templates/crds.yaml
 
 package main
 
@@ -62,12 +62,9 @@ func run(c *cli.Context) error {
 
 	logrus.Info("Starting controller")
 	ctx := signals.SetupSignalHandler(context.Background())
-	kubeConfig, err := kubeconfig.GetNonInteractiveClientConfigWithContext(KubeConfig, Context).ClientConfig()
-	if err != nil {
-		return err
-	}
+	clientConfig := kubeconfig.GetNonInteractiveClientConfigWithContext(KubeConfig, Context)
 
-	if err := controllers.Register(ctx, "", kubeConfig); err != nil {
+	if err := controllers.Register(ctx, "", clientConfig); err != nil {
 		return err
 	}
 

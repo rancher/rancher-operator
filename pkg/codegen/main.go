@@ -3,8 +3,8 @@ package main
 import (
 	"os"
 
+	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-
 	controllergen "github.com/rancher/wrangler/pkg/controller-gen"
 	"github.com/rancher/wrangler/pkg/controller-gen/args"
 )
@@ -21,11 +21,20 @@ func main() {
 				},
 				GenerateTypes: true,
 			},
+			"fleet.cattle.io": {
+				Types: []interface{}{
+					fleet.GitRepo{},
+					fleet.Cluster{},
+					fleet.ClusterGroup{},
+					fleet.ClusterRegistrationToken{},
+				},
+			},
 			"management.cattle.io": {
 				Types: []interface{}{
 					v3.Cluster{},
 					v3.ClusterRegistrationToken{},
 					v3.ClusterRoleTemplateBinding{},
+					v3.FleetWorkspace{},
 					v3.Project{},
 					v3.ProjectRoleTemplateBinding{},
 					v3.RoleTemplate{},

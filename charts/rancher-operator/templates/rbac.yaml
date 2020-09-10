@@ -8,11 +8,13 @@ rules:
   resources:
   - secrets
   - configmaps
+  - namespaces
   verbs:
   - '*'
 - apiGroups:
   - "rancher.cattle.io"
   - "management.cattle.io"
+  - "fleet.cattle.io"
   resources:
   - '*'
   verbs:

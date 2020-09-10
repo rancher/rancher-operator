@@ -3,21 +3,20 @@ package controllers
 import (
 	"context"
 
-	"github.com/rancher/rancher-operator/pkg/principals"
-
-	"github.com/rancher/rancher-operator/pkg/controllers/auth"
-
-	"github.com/rancher/rancher-operator/pkg/controllers/projects"
-
 	"github.com/rancher/rancher-operator/pkg/clients"
+	"github.com/rancher/rancher-operator/pkg/controllers/auth"
 	"github.com/rancher/rancher-operator/pkg/controllers/cluster"
+	"github.com/rancher/rancher-operator/pkg/controllers/fleetcluster"
+	"github.com/rancher/rancher-operator/pkg/controllers/projects"
+	"github.com/rancher/rancher-operator/pkg/controllers/workspace"
+	"github.com/rancher/rancher-operator/pkg/principals"
 	"github.com/rancher/wrangler/pkg/leader"
 	"github.com/sirupsen/logrus"
-	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
-func Register(ctx context.Context, systemNamespace string, cfg *rest.Config) error {
-	clients, err := clients.New(cfg)
+func Register(ctx context.Context, systemNamespace string, clientConfig clientcmd.ClientConfig) error {
+	clients, err := clients.New(clientConfig)
 	if err != nil {
 		return err
 	}
@@ -28,6 +27,8 @@ func Register(ctx context.Context, systemNamespace string, cfg *rest.Config) err
 	projects.Register(ctx, clients)
 	auth.Register(ctx, clients, lookup)
 	auth.RegisterRoleTemplate(ctx, clients)
+	workspace.Register(ctx, clients)
+	fleetcluster.Register(ctx, clients)
 
 	leader.RunOrDie(ctx, systemNamespace, "rancher-controller-lock", clients.K8s, func(ctx context.Context) {
 		if err := clients.Start(ctx); err != nil {

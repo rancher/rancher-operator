@@ -23,5 +23,8 @@ func Get(settings mgmtcontrollers.SettingCache, key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if server.Value == "" {
+		return server.Default, nil
+	}
 	return server.Value, nil
 }

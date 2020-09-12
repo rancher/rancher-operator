@@ -31,6 +31,8 @@ func Register(ctx context.Context, clients *clients.Clients) {
 		workspaces:     clients.Management.FleetWorkspace(),
 	}
 
+	clients.Management.Setting().OnChange(ctx, "default-workspace", h.OnSetting)
+
 	mgmtcontrollers.RegisterFleetWorkspaceGeneratingHandler(ctx,
 		clients.Management.FleetWorkspace(),
 		clients.Apply.
@@ -43,21 +45,59 @@ func Register(ctx context.Context, clients *clients.Clients) {
 		})
 
 	clients.Fleet.ClusterRegistrationToken().OnChange(ctx, "workspace-backport",
-		func(s string, token *fleet.ClusterRegistrationToken) (*fleet.ClusterRegistrationToken, error) {
-			return token, h.onFleetObject(token)
+		func(s string, obj *fleet.ClusterRegistrationToken) (*fleet.ClusterRegistrationToken, error) {
+			if obj == nil {
+				return nil, nil
+			}
+			return obj, h.onFleetObject(obj)
 		})
 	clients.Fleet.Cluster().OnChange(ctx, "workspace-backport",
-		func(s string, token *fleet.Cluster) (*fleet.Cluster, error) {
-			return token, h.onFleetObject(token)
+		func(s string, obj *fleet.Cluster) (*fleet.Cluster, error) {
+			if obj == nil {
+				return nil, nil
+			}
+			return obj, h.onFleetObject(obj)
 		})
 	clients.Fleet.ClusterGroup().OnChange(ctx, "workspace-backport",
-		func(s string, token *fleet.ClusterGroup) (*fleet.ClusterGroup, error) {
-			return token, h.onFleetObject(token)
+		func(s string, obj *fleet.ClusterGroup) (*fleet.ClusterGroup, error) {
+			if obj == nil {
+				return nil, nil
+			}
+			return obj, h.onFleetObject(obj)
 		})
 	clients.Fleet.GitRepo().OnChange(ctx, "workspace-backport",
-		func(s string, token *fleet.GitRepo) (*fleet.GitRepo, error) {
-			return token, h.onFleetObject(token)
+		func(s string, obj *fleet.GitRepo) (*fleet.GitRepo, error) {
+			if obj == nil {
+				return nil, nil
+			}
+			return obj, h.onFleetObject(obj)
 		})
+}
+
+func (h *handle) OnSetting(key string, setting *mgmt.Setting) (*mgmt.Setting, error) {
+	if setting == nil || setting.Name != "fleet-default-workspace-name" {
+		return setting, nil
+	}
+
+	value := setting.Value
+	if value == "" {
+		value = setting.Default
+	}
+
+	if value == "" {
+		return setting, nil
+	}
+
+	_, err := h.workspaceCache.Get(value)
+	if apierror.IsNotFound(err) {
+		_, err = h.workspaces.Create(&mgmt.FleetWorkspace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: value,
+			},
+		})
+	}
+
+	return setting, err
 }
 
 func (h *handle) OnChange(workspace *mgmt.FleetWorkspace, status mgmt.FleetWorkspaceStatus) ([]runtime.Object, mgmt.FleetWorkspaceStatus, error) {
@@ -78,8 +118,7 @@ func (h *handle) OnChange(workspace *mgmt.FleetWorkspace, status mgmt.FleetWorks
 func (h *handle) onFleetObject(obj runtime.Object) error {
 	m, err := meta.Accessor(obj)
 	if err != nil {
-		// ignore error, this will happen when obj is nil
-		return nil
+		return err
 	}
 
 	_, err = h.workspaceCache.Get(m.GetNamespace())

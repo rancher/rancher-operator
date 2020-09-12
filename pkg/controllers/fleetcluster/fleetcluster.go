@@ -9,6 +9,7 @@ import (
 	mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/rancher-operator/pkg/settings"
 	mgmt "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/rancher/wrangler/pkg/yaml"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -94,6 +95,10 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 		cluster.Labels[clusterName] == "" ||
 		cluster.Spec.Internal {
 		return nil, status, nil
+	}
+
+	if !mgmt.ClusterConditionReady.IsTrue(cluster) {
+		return nil, status, generic.ErrSkip
 	}
 
 	return []runtime.Object{

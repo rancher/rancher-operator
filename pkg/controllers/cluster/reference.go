@@ -5,6 +5,7 @@ import (
 
 	v1 "github.com/rancher/rancher-operator/pkg/apis/rancher.cattle.io/v1"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	apierror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -75,6 +76,23 @@ func (h *handler) claimCluster(cluster *v1.Cluster, status v1.ClusterStatus) (*v
 
 	if len(available) == 0 {
 		return nil, fmt.Errorf("failed to find a cluster that matches %s", cluster.Spec.ReferencedConfig.Selector)
+	}
+
+	for _, available := range available {
+		if available.Labels[claimedLabelName] == "" || available.Labels[claimedLabelNamespace] == "" {
+			continue
+		}
+
+		_, err := h.clusters.Cache().Get(available.Labels[claimedLabelNamespace], available.Labels[claimedLabelName])
+		if apierror.IsNotFound(err) {
+			copy := available.DeepCopy()
+			delete(copy.Labels, claimedLabelNamespace)
+			delete(copy.Labels, claimedLabelName)
+			_, err := h.rclusters.Update(copy)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return nil, fmt.Errorf("all clusters (%d) already claimed that match %s", len(available), cluster.Spec.ReferencedConfig.Selector)

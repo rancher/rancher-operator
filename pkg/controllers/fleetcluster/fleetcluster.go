@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/wrangler/pkg/yaml"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 var (
@@ -101,12 +102,18 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 		return nil, status, generic.ErrSkip
 	}
 
+	labels := yaml.CleanAnnotationsForExport(cluster.Labels)
+	labels["management.cattle.io/cluster-name"] = cluster.Name
+	if errs := validation.IsValidLabelValue(cluster.Spec.DisplayName); len(errs) == 0 {
+		labels["management.cattle.io/cluster-display-name"] = cluster.Spec.DisplayName
+	}
+
 	return []runtime.Object{
 		&v1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cluster.Name,
 				Namespace: cluster.Spec.FleetWorkspaceName,
-				Labels:    yaml.CleanAnnotationsForExport(cluster.Labels),
+				Labels:    labels,
 			},
 			Spec: v1.ClusterSpec{
 				ReferencedConfig: &v1.ReferencedConfig{
@@ -122,7 +129,7 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cluster.Name,
 				Namespace: cluster.Spec.FleetWorkspaceName,
-				Labels:    yaml.CleanAnnotationsForExport(cluster.Labels),
+				Labels:    labels,
 			},
 			Spec: fleet.ClusterSpec{
 				KubeConfigSecret: cluster.Name + "-kubeconfig",

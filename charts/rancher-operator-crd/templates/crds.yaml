@@ -67,6 +67,7 @@ spec:
                         nullable: true
                         type: string
                       gpu:
+                        nullable: true
                         type: boolean
                       instanceType:
                         nullable: true
@@ -105,8 +106,10 @@ spec:
                   nullable: true
                   type: array
                 privateAccess:
+                  nullable: true
                   type: boolean
                 publicAccess:
+                  nullable: true
                   type: boolean
                 publicAccessSources:
                   items:
@@ -118,6 +121,7 @@ spec:
                   nullable: true
                   type: string
                 secretsEncryption:
+                  nullable: true
                   type: boolean
                 securityGroups:
                   items:

@@ -30,6 +30,10 @@ func (a *Clients) Start(ctx context.Context) error {
 		return err
 	}
 
+	if err := a.Clients.Start(ctx); err != nil {
+		return err
+	}
+
 	return start.All(ctx, 5, a.starters...)
 }
 

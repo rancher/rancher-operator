@@ -163,6 +163,7 @@ func (h *handler) generateCluster(cluster *v1.Cluster, status v1.ClusterStatus) 
 func (h *handler) createCluster(cluster *v1.Cluster, status v1.ClusterStatus, spec v3.ClusterSpec) ([]runtime.Object, v1.ClusterStatus, error) {
 	spec.DisplayName = cluster.Name
 	spec.Description = cluster.Annotations["field.cattle.io/description"]
+	spec.FleetWorkspaceName = cluster.Spec.FleetWorkspaceName
 	newCluster := &v3.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name.SafeConcatName("c", cluster.Namespace, cluster.Name),

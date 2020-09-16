@@ -2,3 +2,7 @@ image:
   repository: rancher/rancher-operator
   tag: latest
   imagePullPolicy: IfNotPresent
+
+global:
+  cattle:
+    systemDefaultRegistry: ""

@@ -19,7 +19,6 @@ type Cluster struct {
 }
 
 type ClusterSpec struct {
-	FleetWorkspaceName            string                                  `json:"fleetWorkspaceName,omitempty"`
 	ControlPlaneEndpoint          *Endpoint                               `json:"controlPlaneEndpoint,omitempty"`
 	EKSConfig                     *eksv1.EKSClusterConfigSpec             `json:"eksConfig,omitempty"`
 	ImportedConfig                *ImportedConfig                         `json:"importedConfig,omitempty"`

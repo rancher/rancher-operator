@@ -9,7 +9,9 @@ import (
 	mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/rancher-operator/pkg/settings"
 	mgmt "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/wrangler/pkg/apply"
 	"github.com/rancher/wrangler/pkg/generic"
+	"github.com/rancher/wrangler/pkg/relatedresource"
 	"github.com/rancher/wrangler/pkg/yaml"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,12 +25,14 @@ var (
 type handler struct {
 	settings mgmtcontrollers.SettingCache
 	clusters mgmtcontrollers.ClusterClient
+	apply    apply.Apply
 }
 
 func Register(ctx context.Context, clients *clients.Clients) {
 	h := &handler{
 		settings: clients.Management.Setting().Cache(),
 		clusters: clients.Management.Cluster(),
+		apply:    clients.Apply.WithCacheTypes(clients.Cluster()),
 	}
 
 	clients.Management.Cluster().OnChange(ctx, "fleet-cluster-label", h.addLabel)
@@ -42,6 +46,21 @@ func Register(ctx context.Context, clients *clients.Clients) {
 		h.createCluster,
 		nil,
 	)
+
+	relatedresource.WatchClusterScoped(ctx, "fleet-cluster-resolver", func(namespace, name string, obj runtime.Object) ([]relatedresource.Key, error) {
+		owner, err := h.apply.FindOwner(obj)
+		if err != nil {
+			// ignore error
+			return nil, nil
+		}
+		if c, ok := owner.(*v1.Cluster); ok {
+			return []relatedresource.Key{{
+				Namespace: c.Namespace,
+				Name:      c.Name,
+			}}, nil
+		}
+		return nil, nil
+	}, clients.Management.Cluster(), clients.Cluster())
 }
 
 func (h *handler) addLabel(key string, cluster *mgmt.Cluster) (*mgmt.Cluster, error) {
@@ -108,8 +127,25 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 		labels["management.cattle.io/cluster-display-name"] = cluster.Spec.DisplayName
 	}
 
-	return []runtime.Object{
-		&v1.Cluster{
+	var (
+		secretName    = cluster.Name + "-kubeconfig"
+		createCluster = true
+		objs          []runtime.Object
+	)
+
+	if owningCluster, err := h.apply.FindOwner(cluster); err == apply.ErrOwnerNotFound {
+	} else if err != nil {
+		return nil, status, err
+	} else if rCluster, ok := owningCluster.(*v1.Cluster); ok {
+		if rCluster.Status.ClientSecretName == "" {
+			return nil, status, generic.ErrSkip
+		}
+		createCluster = false
+		secretName = rCluster.Status.ClientSecretName
+	}
+
+	if createCluster {
+		objs = append(objs, &v1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cluster.Name,
 				Namespace: cluster.Spec.FleetWorkspaceName,
@@ -124,16 +160,19 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 					},
 				},
 			},
+		})
+	}
+
+	objs = append(objs, &fleet.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Spec.FleetWorkspaceName,
+			Labels:    labels,
 		},
-		&fleet.Cluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      cluster.Name,
-				Namespace: cluster.Spec.FleetWorkspaceName,
-				Labels:    labels,
-			},
-			Spec: fleet.ClusterSpec{
-				KubeConfigSecret: cluster.Name + "-kubeconfig",
-			},
+		Spec: fleet.ClusterSpec{
+			KubeConfigSecret: secretName,
 		},
-	}, status, nil
+	})
+
+	return objs, status, nil
 }

@@ -7,15 +7,15 @@ import (
 	"net/http"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
-
 	v1 "github.com/rancher/rancher-operator/pkg/apis/rancher.cattle.io/v1"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/apply"
+	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/rancher/wrangler/pkg/yaml"
 	apierror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -40,6 +40,7 @@ func (h *handler) importCluster(cluster *v1.Cluster, status v1.ClusterStatus, sp
 
 func (h *handler) deployAgent(cluster *v1.Cluster, status v1.ClusterStatus) (bool, error) {
 	if _, err := h.rclusterCache.Get(status.ClusterName); apierror.IsNotFound(err) {
+		h.clusters.EnqueueAfter(cluster.Namespace, cluster.Name, 2*time.Second)
 		// wait until the cluster is created
 		return false, nil
 	} else if err != nil {
@@ -71,13 +72,21 @@ func (h *handler) deployAgent(cluster *v1.Cluster, status v1.ClusterStatus) (boo
 		return false, nil
 	}
 
-	return true, h.deploy(cluster.Namespace, cluster.Spec.ImportedConfig.KubeConfigSecret, tokenValue)
+	return true, h.deploy(cluster, cluster.Namespace, cluster.Spec.ImportedConfig.KubeConfigSecret, tokenValue)
 }
 
-func (h *handler) deploy(secretNamespace, secretName string, token string) error {
+func (h *handler) deploy(cluster *v1.Cluster, secretNamespace, secretName string, token string) error {
 	secret, err := h.secretCache.Get(secretNamespace, secretName)
-	if err != nil {
+	if apierror.IsNotFound(err) {
+		h.clusters.EnqueueAfter(cluster.Namespace, cluster.Name, 2*time.Second)
+		return generic.ErrSkip
+	} else if err != nil {
 		return err
+	}
+
+	if len(secret.Data) == 0 {
+		h.clusters.EnqueueAfter(cluster.Namespace, cluster.Name, 2*time.Second)
+		return generic.ErrSkip
 	}
 
 	cfg, err := clientcmd.RESTConfigFromKubeConfig(secret.Data["value"])

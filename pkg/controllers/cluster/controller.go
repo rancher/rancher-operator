@@ -163,7 +163,7 @@ func (h *handler) generateCluster(cluster *v1.Cluster, status v1.ClusterStatus) 
 func (h *handler) createCluster(cluster *v1.Cluster, status v1.ClusterStatus, spec v3.ClusterSpec) ([]runtime.Object, v1.ClusterStatus, error) {
 	spec.DisplayName = cluster.Name
 	spec.Description = cluster.Annotations["field.cattle.io/description"]
-	spec.FleetWorkspaceName = cluster.Spec.FleetWorkspaceName
+	spec.FleetWorkspaceName = cluster.Namespace
 	newCluster := &v3.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name.SafeConcatName("c", cluster.Namespace, cluster.Name),
@@ -199,7 +199,8 @@ func (h *handler) updateStatus(objs []runtime.Object, cluster *v1.Cluster, statu
 		}
 	}
 
-	status.Ready = ready
+	// Never set ready back to false because we will end up deleting the secret
+	status.Ready = status.Ready || ready
 	status.ObservedGeneration = cluster.Generation
 	status.ClusterName = rCluster.Name
 	if ready {
@@ -209,37 +210,38 @@ func (h *handler) updateStatus(objs []runtime.Object, cluster *v1.Cluster, statu
 	}
 
 	if status.Ready {
-		secret, err := h.getKubeConfig(cluster, status)
+		secretName, secret, err := h.getKubeConfig(cluster, status)
 		if err != nil {
 			return nil, status, err
 		}
 		if secret != nil {
+			objs = append(objs, secret)
 		}
-		objs = append(objs, secret)
+		status.ClientSecretName = secretName
 	}
 
 	return objs, status, nil
 }
 
-func (h *handler) getKubeConfig(cluster *v1.Cluster, status v1.ClusterStatus) (runtime.Object, error) {
+func (h *handler) getKubeConfig(cluster *v1.Cluster, status v1.ClusterStatus) (string, *corev1.Secret, error) {
 	var (
 		name       = cluster.Name + "-kubeconfig"
 		tokenValue = ""
 	)
 
 	if cluster.Spec.ImportedConfig != nil && cluster.Spec.ImportedConfig.KubeConfigSecret == name {
-		return nil, nil
+		return name, nil, nil
 	}
 
 	users, err := h.userCache.GetByIndex(byPrincipal, fmt.Sprintf("system://%s", status.ClusterName))
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	for _, user := range users {
 		tokens, err := h.tokenCache.GetByIndex(byAgentUser, user.Name)
 		if err != nil {
-			return nil, err
+			return "", nil, err
 		}
 		for _, token := range tokens {
 			tokenValue = fmt.Sprintf("%s:%s", token.Name, token.Token)
@@ -247,12 +249,12 @@ func (h *handler) getKubeConfig(cluster *v1.Cluster, status v1.ClusterStatus) (r
 	}
 
 	if tokenValue == "" {
-		return nil, fmt.Errorf("failed to find token for cluster %s", status.ClusterName)
+		return "", nil, fmt.Errorf("failed to find token for cluster %s", status.ClusterName)
 	}
 
 	serverURL, cacert, err := h.getServerURLAndCA()
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	data, err := clientcmd.Write(clientcmdapi.Config{
@@ -276,10 +278,10 @@ func (h *handler) getKubeConfig(cluster *v1.Cluster, status v1.ClusterStatus) (r
 		CurrentContext: "default",
 	})
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
-	return &corev1.Secret{
+	return name, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
 			Name:      name,

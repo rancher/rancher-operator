@@ -145,9 +145,6 @@ spec:
                   nullable: true
                   type: object
               type: object
-            fleetWorkspaceName:
-              nullable: true
-              type: string
             importedConfig:
               nullable: true
               properties:

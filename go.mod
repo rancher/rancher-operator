@@ -2,7 +2,7 @@ module github.com/rancher/rancher-operator
 
 go 1.14
 
-replace k8s.io/client-go => k8s.io/client-go v0.18.0
+replace k8s.io/client-go => github.com/rancher/client-go v0.18.8-fleet1
 
 require (
 	github.com/rancher/eks-operator v0.1.0-rc29

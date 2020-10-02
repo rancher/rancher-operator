@@ -12,7 +12,7 @@ require (
 	github.com/rancher/rancher/pkg/apis v0.0.0-20200915005652-d5ba6012d682
 	github.com/rancher/rancher/pkg/client v0.0.0-20200915005652-d5ba6012d682
 	github.com/rancher/rke v1.2.0-rc6
-	github.com/rancher/wrangler v0.6.2-0.20200912225020-2e02d61f54bc
+	github.com/rancher/wrangler v0.7.2
 	github.com/sirupsen/logrus v1.6.0
 	github.com/urfave/cli v1.22.2
 	k8s.io/api v0.18.8

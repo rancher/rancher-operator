@@ -325,9 +325,12 @@ func (a *projectStatusHandler) sync(key string, obj *v1.Project) (*v1.Project, e
 
 		var newErr error
 		obj.Status = newStatus
-		obj, newErr = a.client.UpdateStatus(obj)
+		newObj, newErr := a.client.UpdateStatus(obj)
 		if err == nil {
 			err = newErr
+		}
+		if newErr == nil {
+			obj = newObj
 		}
 	}
 	return obj, err

@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/rancher-operator/pkg/clients"
 	mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
 	mgmt "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	v1 "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/rancher/wrangler/pkg/yaml"
 	corev1 "k8s.io/api/core/v1"
@@ -22,6 +23,7 @@ var (
 
 type handle struct {
 	workspaceCache mgmtcontrollers.FleetWorkspaceCache
+	namespaceCache v1.NamespaceCache
 	workspaces     mgmtcontrollers.FleetWorkspaceClient
 }
 
@@ -29,6 +31,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 	h := &handle{
 		workspaceCache: clients.Management.FleetWorkspace().Cache(),
 		workspaces:     clients.Management.FleetWorkspace(),
+		namespaceCache: clients.Core.Namespace().Cache(),
 	}
 
 	clients.Management.Setting().OnChange(ctx, "default-workspace", h.OnSetting)
@@ -123,9 +126,22 @@ func (h *handle) onFleetObject(obj runtime.Object) error {
 
 	_, err = h.workspaceCache.Get(m.GetNamespace())
 	if apierror.IsNotFound(err) {
+		ns, err := h.namespaceCache.Get(m.GetNamespace())
+		if err != nil {
+			return err
+		}
+
 		_, err = h.workspaces.Create(&mgmt.FleetWorkspace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: m.GetNamespace(),
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "v1",
+						Kind:       "Namespace",
+						Name:       ns.Name,
+						UID:        ns.UID,
+					},
+				},
 				Annotations: map[string]string{
 					managed: "false",
 				},
@@ -133,7 +149,7 @@ func (h *handle) onFleetObject(obj runtime.Object) error {
 			Status: mgmt.FleetWorkspaceStatus{},
 		})
 		if apierror.IsAlreadyExists(err) {
-			err = nil
+			return nil
 		}
 	}
 

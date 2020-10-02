@@ -34,6 +34,7 @@ func Register(ctx context.Context, systemNamespace string, clientConfig clientcm
 		if err := clients.Start(ctx); err != nil {
 			logrus.Fatal(err)
 		}
+		logrus.Info("All controllers are started")
 	})
 
 	return nil

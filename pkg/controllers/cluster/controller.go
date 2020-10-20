@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/rancher-operator/pkg/settings"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/condition"
+	appcontroller "github.com/rancher/wrangler/pkg/generated/controllers/apps/v1"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/rancher/wrangler/pkg/kstatus"
@@ -31,11 +32,15 @@ const (
 	byPrincipal = "by-principal"
 	byAgentUser = "by-agent-user"
 	byCluster   = "by-cluster"
+
+	systemNamespace = "cattle-system"
 )
 
 type handler struct {
 	rclusterCache     mgmtcontrollers.ClusterCache
 	rclusters         mgmtcontrollers.ClusterClient
+	deploymentCache   appcontroller.DeploymentCache
+	daemonsetCache    appcontroller.DaemonSetCache
 	clusterTokenCache mgmtcontrollers.ClusterRegistrationTokenCache
 	clusterTokens     mgmtcontrollers.ClusterRegistrationTokenClient
 	clusters          rocontrollers.ClusterController
@@ -51,6 +56,8 @@ func Register(
 	h := handler{
 		rclusterCache:     clients.Management.Cluster().Cache(),
 		rclusters:         clients.Management.Cluster(),
+		daemonsetCache:    clients.Apps.DaemonSet().Cache(),
+		deploymentCache:   clients.Apps.Deployment().Cache(),
 		clusterTokenCache: clients.Management.ClusterRegistrationToken().Cache(),
 		clusterTokens:     clients.Management.ClusterRegistrationToken(),
 		clusters:          clients.Cluster(),
@@ -293,5 +300,24 @@ func (h *handler) getKubeConfig(cluster *v1.Cluster, status v1.ClusterStatus) (s
 }
 
 func (h *handler) getServerURLAndCA() (string, string, error) {
-	return settings.GetServerURLAndCA(h.settings)
+	serverURL, ca, err := settings.GetServerURLAndCA(h.settings)
+	if err != nil {
+		return "", "", err
+	}
+
+	tlsSecret, err := h.secretCache.Get(systemNamespace, "tls-rancher-internal-ca")
+	if err != nil {
+		return "", "", err
+	}
+	internalCA := string(tlsSecret.Data[corev1.TLSCertKey])
+
+	if dp, err := h.deploymentCache.Get(systemNamespace, "rancher"); err == nil && dp.Spec.Replicas != nil && *dp.Spec.Replicas != 0 {
+		return fmt.Sprintf("https://rancher.%s", systemNamespace), internalCA, nil
+	}
+
+	if _, err := h.daemonsetCache.Get(systemNamespace, "rancher"); err == nil {
+		return fmt.Sprintf("https://rancher.%s", systemNamespace), internalCA, nil
+	}
+
+	return serverURL, ca, nil
 }

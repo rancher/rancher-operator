@@ -8,3 +8,4 @@ annotations:
   catalog.cattle.io/hidden: "true"
   catalog.cattle.io/namespace: rancher-operator-system
   catalog.cattle.io/release-name: rancher-operator-crd
+  catalog.cattle.io/os: linux

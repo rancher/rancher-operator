@@ -38,6 +38,7 @@ github.com/asaskevich/govalidator v0.0.0-20180720115003-f9ffefc3facf/go.mod h1:l
 github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a/go.mod h1:lB+ZfQJz7igIIfQNfa7Ml4HSf2uFQQRzpGGRXenZAgY=
 github.com/aws/aws-sdk-go v1.30.22 h1:wImJ8jQrplgmxaTeUY7FrJFn4te/VtWq+mmmJ1TnWAg=
 github.com/aws/aws-sdk-go v1.30.22/go.mod h1:5zCpMtNQVjRREroY7sYe8lOMRSxkhG6MZveU8YkpAk0=
+github.com/aws/aws-sdk-go v1.36.7/go.mod h1:hcU610XS61/+aQV88ixoOzUoG7v3b31pl2zKMmprdro=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
@@ -255,6 +256,8 @@ github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANyt
 github.com/jessevdk/go-flags v1.4.0/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/jmespath/go-jmespath v0.3.0 h1:OS12ieG61fsCg5+qLJ+SsW9NicxNkg3b25OyT2yCeUc=
 github.com/jmespath/go-jmespath v0.3.0/go.mod h1:9QtRXoHjLGCJ5IBSaohpXITPlowMeeYCZ7fLUTSywik=
+github.com/jmespath/go-jmespath v0.4.0/go.mod h1:T8mJZnbsbmF+m6zOOFylbeCJqk5+pHWvzYPziyZiYoo=
+github.com/jmespath/go-jmespath/internal/testify v1.5.1/go.mod h1:L3OGu8Wl2/fWfCI6z80xFu9LTZmf1ZRjMHUOPmWr69U=
 github.com/jonboulle/clockwork v0.1.0/go.mod h1:Ii8DK3G1RaLaWxj9trq07+26W01tbo22gdxWY5EU2bo=
 github.com/json-iterator/go v0.0.0-20180612202835-f2b4162afba3/go.mod h1:+SdeFBvtyEkXs7REEP0seUULqWtbJapLOCVDaaPEHmU=
 github.com/json-iterator/go v1.1.6/go.mod h1:+SdeFBvtyEkXs7REEP0seUULqWtbJapLOCVDaaPEHmU=
@@ -381,8 +384,8 @@ github.com/rancher/client-go v0.18.8-fleet1 h1:6Of+trXPllY0YJN1lAQP+SoqKETkSG7iU
 github.com/rancher/client-go v0.18.8-fleet1/go.mod h1:HqFqMllQ5NnQJNwjro9k5zMyfhZlOwpuTLVrxjkYSxU=
 github.com/rancher/eks-operator v0.1.0-rc22 h1:wPX+aP/kJ3q9wA7qiZ8jEDbRZ6PV6cWnodemKbWXmcw=
 github.com/rancher/eks-operator v0.1.0-rc22/go.mod h1:TrTF54+K2X6QLhVFspIfawYcPnVNLSIBrgCvpE1BiqM=
-github.com/rancher/eks-operator v0.1.0-rc29 h1:63zzvXUZNAWkseJyPvMq7W4b7wFMDiJvZF/mau1hEiU=
-github.com/rancher/eks-operator v0.1.0-rc29/go.mod h1:Q9J5NGpq/y1qdog+6YzYmvhPDKgJ7F/8vOgza9+HF6M=
+github.com/rancher/eks-operator v1.0.6-rc1 h1:VY2lLcaHtBMByd7pq7px4fB+GW0cd0cfessODbmH+Tc=
+github.com/rancher/eks-operator v1.0.6-rc1/go.mod h1:GB2kyPtIN0r+DGlUcDgEUMsB4qRwZH7OKsraemZT+GA=
 github.com/rancher/fleet/pkg/apis v0.0.0-20200909045814-3675caaa7070 h1:ABrvFazWllKFAxBJ07DXKhTOjyYYCOfaslsJAK/Nj0c=
 github.com/rancher/fleet/pkg/apis v0.0.0-20200909045814-3675caaa7070/go.mod h1:Taid9n2/wUWWIeLXgP5/zoKhk1f7GDfwjUg22+Ca4GE=
 github.com/rancher/lasso v0.0.0-20200427171700-e0509f89f319/go.mod h1:6Dw19z1lDIpL887eelVjyqH/mna1hfR61ddCFOG78lw=
@@ -404,11 +407,10 @@ github.com/rancher/rke v1.2.0-rc6/go.mod h1:JXG/6VZssKO711ZgkKcV3ALvpCaxVcO108Ou
 github.com/rancher/wrangler v0.6.2-0.20200427172034-da9b142ae061/go.mod h1:n5Du/gGD7WoiqnEo0SHnPirDIp1V9Zu+6guc8lXS2dk=
 github.com/rancher/wrangler v0.6.2-0.20200515155908-1923f3f8ec3f/go.mod h1:NmtmlLkchboIksYJuBemwcP4RBfv8FpeyhVoWXB9Wdc=
 github.com/rancher/wrangler v0.6.2-0.20200820173016-2068de651106/go.mod h1:iKqQcYs4YSDjsme52OZtQU4jHPmLlIiM93aj2c8c/W8=
-github.com/rancher/wrangler v0.6.2-0.20200822010948-6d667521af49/go.mod h1:iKqQcYs4YSDjsme52OZtQU4jHPmLlIiM93aj2c8c/W8=
 github.com/rancher/wrangler v0.6.2-0.20200829053106-7e1dd4260224 h1:NWYSyS1YiWJOB84xq0FcGDY8xQQwrfKoip2BjMSlu1g=
 github.com/rancher/wrangler v0.6.2-0.20200829053106-7e1dd4260224/go.mod h1:I7qe4DZNMOLKVa9ax7DJdBZ0XtKOppLF/dalhPX3vaE=
-github.com/rancher/wrangler v0.7.2 h1:GlUIFKO26qq1ICMf1CjAGBr2uP52GQX3E0E69zkW88Q=
-github.com/rancher/wrangler v0.7.2/go.mod h1:goezjesEKwMxHLfltdjg9DW0xWV7txQee6vOuSDqXAI=
+github.com/rancher/wrangler v0.7.3-0.20201020003736-e86bc912dfac h1:1mpYb+EPqZ8S95UxMPsQ4tNOPSLrVurAqW5B651chrM=
+github.com/rancher/wrangler v0.7.3-0.20201020003736-e86bc912dfac/go.mod h1:goezjesEKwMxHLfltdjg9DW0xWV7txQee6vOuSDqXAI=
 github.com/rancher/wrangler-api v0.6.1-0.20200427172631-a7c2f09b783e h1:UJpGtw6IKs0dHPTF+6Wd12lskeCZZAejl8/ie/fc1+0=
 github.com/rancher/wrangler-api v0.6.1-0.20200427172631-a7c2f09b783e/go.mod h1:2lcWR98q8HU3U4mVETnXc8quNG0uXxrt8vKd6cAa/30=
 github.com/remyoudompheng/bigfft v0.0.0-20170806203942-52369c62f446/go.mod h1:uYEyJGbgTkfkS4+E/PavXkNJcbFIpEtjt2B0KDQ5+9M=
@@ -547,6 +549,8 @@ golang.org/x/net v0.0.0-20200226121028-0de0cce0169b h1:0mm1VjtFUOIlE1SbDlwjYaDxZ
 golang.org/x/net v0.0.0-20200226121028-0de0cce0169b/go.mod h1:z5CRVTTTmAJ677TzLLGU+0bjPO0LkuOLi4/5GtJWs/s=
 golang.org/x/net v0.0.0-20200625001655-4c5254603344 h1:vGXIOMxbNfDTk/aXCmfdLgkrSV+Z2tcbze+pEc3v5W4=
 golang.org/x/net v0.0.0-20200625001655-4c5254603344/go.mod h1:/O7V0waA8r7cgGh81Ro3o1hOxt32SMVPicZroKQ2sZA=
+golang.org/x/net v0.0.0-20201110031124-69a78807bb2b h1:uwuIcX0g4Yl1NC5XAz37xsr2lTtcqevgzYNVt49waME=
+golang.org/x/net v0.0.0-20201110031124-69a78807bb2b/go.mod h1:sp8m0HH+o8qH0wwXwYZr8TS3Oi6o0r6Gce1SSxlDquU=
 golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be/go.mod h1:N/0e6XlmueqKjAGxoOufVs8QHGRruUQn6yWY3a++T0U=
 golang.org/x/oauth2 v0.0.0-20190226205417-e64efc72b421/go.mod h1:gOpvHmFTYa4IltrdGE7lF6nIHvwfUNPOp7c8zoXwtLw=
 golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45 h1:SVwTIAaPC2U/AvvLNZ2a7OVsmBpC8L5BlwK1whH3hm0=
@@ -585,12 +589,16 @@ golang.org/x/sys v0.0.0-20191022100944-742c48ecaeb7/go.mod h1:h1NjWce9XRLGQEsW7w
 golang.org/x/sys v0.0.0-20200122134326-e047566fdf82/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20200323222414-85ca7c5b95cd h1:xhmwyvizuTgC2qz7ZlMluP20uW+C3Rm0FD/WLDX8884=
 golang.org/x/sys v0.0.0-20200323222414-85ca7c5b95cd/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f h1:+Nyd8tzPX9R7BWHguqsrbFdRx3WQ/1ib8I44HXV5yTA=
+golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/text v0.0.0-20160726164857-2910a502d2bf/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/text v0.3.1-0.20171227012246-e19ae1496984/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/text v0.3.1-0.20180807135948-17ff2d5776d2/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/text v0.3.2 h1:tW2bmiBqwgJj/UpqtC8EpXEZVYOwU0yG4iWbprSVAcs=
 golang.org/x/text v0.3.2/go.mod h1:bEr9sfX3Q8Zfm5fL9x+3itogRgK3+ptLWKqgva+5dAk=
+golang.org/x/text v0.3.3 h1:cokOdA+Jmi5PJGXLlLllQSgYigAEfHXJAERHVMaCc2k=
+golang.org/x/text v0.3.3/go.mod h1:5Zoc/QRtKVWzQhOtBMvqHzDpF6irO9z98xDceosuGiQ=
 golang.org/x/time v0.0.0-20180412165947-fbb02b2291d2/go.mod h1:tRJNPiyCQ0inRvYxbN9jk5I+vvW/OXSQhTDSoE431IQ=
 golang.org/x/time v0.0.0-20181108054448-85acf8d2951c/go.mod h1:tRJNPiyCQ0inRvYxbN9jk5I+vvW/OXSQhTDSoE431IQ=
 golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 h1:SvFZT6jyqRaOeXpc5h/JSfZenJ2O330aBsf7JfSUXmQ=

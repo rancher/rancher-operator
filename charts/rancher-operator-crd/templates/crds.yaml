@@ -663,6 +663,27 @@ spec:
                         type: array
                       nullable: true
                       type: object
+                    tolerations:
+                      items:
+                        properties:
+                          effect:
+                            nullable: true
+                            type: string
+                          key:
+                            nullable: true
+                            type: string
+                          operator:
+                            nullable: true
+                            type: string
+                          tolerationSeconds:
+                            nullable: true
+                            type: integer
+                          value:
+                            nullable: true
+                            type: string
+                        type: object
+                      nullable: true
+                      type: array
                     updateStrategy:
                       nullable: true
                       properties:
@@ -692,6 +713,9 @@ spec:
                   type: boolean
                 ingress:
                   properties:
+                    defaultBackend:
+                      nullable: true
+                      type: boolean
                     dnsPolicy:
                       nullable: true
                       type: string
@@ -992,6 +1016,191 @@ spec:
                               sizeLimit:
                                 nullable: true
                                 type: string
+                            type: object
+                          ephemeral:
+                            nullable: true
+                            properties:
+                              readOnly:
+                                type: boolean
+                              volumeClaimTemplate:
+                                nullable: true
+                                properties:
+                                  metadata:
+                                    properties:
+                                      annotations:
+                                        additionalProperties:
+                                          nullable: true
+                                          type: string
+                                        nullable: true
+                                        type: object
+                                      clusterName:
+                                        nullable: true
+                                        type: string
+                                      creationTimestamp:
+                                        nullable: true
+                                        type: string
+                                      deletionGracePeriodSeconds:
+                                        nullable: true
+                                        type: integer
+                                      deletionTimestamp:
+                                        nullable: true
+                                        type: string
+                                      finalizers:
+                                        items:
+                                          nullable: true
+                                          type: string
+                                        nullable: true
+                                        type: array
+                                      generateName:
+                                        nullable: true
+                                        type: string
+                                      generation:
+                                        type: integer
+                                      labels:
+                                        additionalProperties:
+                                          nullable: true
+                                          type: string
+                                        nullable: true
+                                        type: object
+                                      managedFields:
+                                        items:
+                                          properties:
+                                            apiVersion:
+                                              nullable: true
+                                              type: string
+                                            fieldsType:
+                                              nullable: true
+                                              type: string
+                                            fieldsV1:
+                                              nullable: true
+                                              type: object
+                                            manager:
+                                              nullable: true
+                                              type: string
+                                            operation:
+                                              nullable: true
+                                              type: string
+                                            time:
+                                              nullable: true
+                                              type: string
+                                          type: object
+                                        nullable: true
+                                        type: array
+                                      name:
+                                        nullable: true
+                                        type: string
+                                      namespace:
+                                        nullable: true
+                                        type: string
+                                      ownerReferences:
+                                        items:
+                                          properties:
+                                            apiVersion:
+                                              nullable: true
+                                              type: string
+                                            blockOwnerDeletion:
+                                              nullable: true
+                                              type: boolean
+                                            controller:
+                                              nullable: true
+                                              type: boolean
+                                            kind:
+                                              nullable: true
+                                              type: string
+                                            name:
+                                              nullable: true
+                                              type: string
+                                            uid:
+                                              nullable: true
+                                              type: string
+                                          type: object
+                                        nullable: true
+                                        type: array
+                                      resourceVersion:
+                                        nullable: true
+                                        type: string
+                                      selfLink:
+                                        nullable: true
+                                        type: string
+                                      uid:
+                                        nullable: true
+                                        type: string
+                                    type: object
+                                  spec:
+                                    properties:
+                                      accessModes:
+                                        items:
+                                          nullable: true
+                                          type: string
+                                        nullable: true
+                                        type: array
+                                      dataSource:
+                                        nullable: true
+                                        properties:
+                                          apiGroup:
+                                            nullable: true
+                                            type: string
+                                          kind:
+                                            nullable: true
+                                            type: string
+                                          name:
+                                            nullable: true
+                                            type: string
+                                        type: object
+                                      resources:
+                                        properties:
+                                          limits:
+                                            additionalProperties:
+                                              nullable: true
+                                              type: string
+                                            nullable: true
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              nullable: true
+                                              type: string
+                                            nullable: true
+                                            type: object
+                                        type: object
+                                      selector:
+                                        nullable: true
+                                        properties:
+                                          matchExpressions:
+                                            items:
+                                              properties:
+                                                key:
+                                                  nullable: true
+                                                  type: string
+                                                operator:
+                                                  nullable: true
+                                                  type: string
+                                                values:
+                                                  items:
+                                                    nullable: true
+                                                    type: string
+                                                  nullable: true
+                                                  type: array
+                                              type: object
+                                            nullable: true
+                                            type: array
+                                          matchLabels:
+                                            additionalProperties:
+                                              nullable: true
+                                              type: string
+                                            nullable: true
+                                            type: object
+                                        type: object
+                                      storageClassName:
+                                        nullable: true
+                                        type: string
+                                      volumeMode:
+                                        nullable: true
+                                        type: string
+                                      volumeName:
+                                        nullable: true
+                                        type: string
+                                    type: object
+                                type: object
                             type: object
                           fc:
                             nullable: true
@@ -1462,6 +1671,13 @@ spec:
                         type: object
                       nullable: true
                       type: array
+                    httpPort:
+                      type: integer
+                    httpsPort:
+                      type: integer
+                    networkMode:
+                      nullable: true
+                      type: string
                     nodeSelector:
                       additionalProperties:
                         nullable: true
@@ -1477,6 +1693,27 @@ spec:
                     provider:
                       nullable: true
                       type: string
+                    tolerations:
+                      items:
+                        properties:
+                          effect:
+                            nullable: true
+                            type: string
+                          key:
+                            nullable: true
+                            type: string
+                          operator:
+                            nullable: true
+                            type: string
+                          tolerationSeconds:
+                            nullable: true
+                            type: integer
+                          value:
+                            nullable: true
+                            type: string
+                        type: object
+                      nullable: true
+                      type: array
                     updateStrategy:
                       nullable: true
                       properties:
@@ -1515,6 +1752,27 @@ spec:
                     replicas:
                       nullable: true
                       type: integer
+                    tolerations:
+                      items:
+                        properties:
+                          effect:
+                            nullable: true
+                            type: string
+                          key:
+                            nullable: true
+                            type: string
+                          operator:
+                            nullable: true
+                            type: string
+                          tolerationSeconds:
+                            nullable: true
+                            type: integer
+                          value:
+                            nullable: true
+                            type: string
+                        type: object
+                      nullable: true
+                      type: array
                     updateStrategy:
                       nullable: true
                       properties:
@@ -1535,6 +1793,208 @@ spec:
                   type: object
                 network:
                   properties:
+                    aciNetworkProvider:
+                      nullable: true
+                      properties:
+                        aep:
+                          nullable: true
+                          type: string
+                        apicHosts:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
+                        apicRefreshTime:
+                          nullable: true
+                          type: string
+                        apicUserCrt:
+                          nullable: true
+                          type: string
+                        apicUserKey:
+                          nullable: true
+                          type: string
+                        apicUserName:
+                          nullable: true
+                          type: string
+                        cApic:
+                          nullable: true
+                          type: string
+                        controllerLogLevel:
+                          nullable: true
+                          type: string
+                        dropLogEnable:
+                          nullable: true
+                          type: string
+                        enableEndpointSlice:
+                          nullable: true
+                          type: string
+                        encapType:
+                          nullable: true
+                          type: string
+                        epRegistry:
+                          nullable: true
+                          type: string
+                        externDynamic:
+                          nullable: true
+                          type: string
+                        externStatic:
+                          nullable: true
+                          type: string
+                        gbpPodSubnet:
+                          nullable: true
+                          type: string
+                        hostAgentLogLevel:
+                          nullable: true
+                          type: string
+                        imagePullPolicy:
+                          nullable: true
+                          type: string
+                        imagePullSecret:
+                          nullable: true
+                          type: string
+                        infraVlan:
+                          nullable: true
+                          type: string
+                        installIstio:
+                          nullable: true
+                          type: string
+                        istioProfile:
+                          nullable: true
+                          type: string
+                        kafkaBrokers:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
+                        kafkaClientCrt:
+                          nullable: true
+                          type: string
+                        kafkaClientKey:
+                          nullable: true
+                          type: string
+                        kubeAPIVlan:
+                          nullable: true
+                          type: string
+                        l3Out:
+                          nullable: true
+                          type: string
+                        l3OutExternalNetworks:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
+                        maxNodesSvcGraph:
+                          nullable: true
+                          type: string
+                        mcastRangeEnd:
+                          nullable: true
+                          type: string
+                        mcastRangeStart:
+                          nullable: true
+                          type: string
+                        noPriorityClass:
+                          nullable: true
+                          type: string
+                        nodeSubnet:
+                          nullable: true
+                          type: string
+                        nodeSvcSubnet:
+                          nullable: true
+                          type: string
+                        opflexClientSSL:
+                          nullable: true
+                          type: string
+                        opflexLogLevel:
+                          nullable: true
+                          type: string
+                        opflexMode:
+                          nullable: true
+                          type: string
+                        opflexServerPort:
+                          nullable: true
+                          type: string
+                        overlayVRFName:
+                          nullable: true
+                          type: string
+                        ovsMemoryLimit:
+                          nullable: true
+                          type: string
+                        pbrTrackingNonSnat:
+                          nullable: true
+                          type: string
+                        podSubnetChunkSize:
+                          nullable: true
+                          type: string
+                        runGbpContainer:
+                          nullable: true
+                          type: string
+                        runOpflexServerContainer:
+                          nullable: true
+                          type: string
+                        serviceMonitorInterval:
+                          nullable: true
+                          type: string
+                        serviceVlan:
+                          nullable: true
+                          type: string
+                        snatContractScope:
+                          nullable: true
+                          type: string
+                        snatNamespace:
+                          nullable: true
+                          type: string
+                        snatPortRangeEnd:
+                          nullable: true
+                          type: string
+                        snatPortRangeStart:
+                          nullable: true
+                          type: string
+                        snatPortsPerNode:
+                          nullable: true
+                          type: string
+                        subnetDomainName:
+                          nullable: true
+                          type: string
+                        systemId:
+                          nullable: true
+                          type: string
+                        tenant:
+                          nullable: true
+                          type: string
+                        token:
+                          nullable: true
+                          type: string
+                        useAciAnywhereCRD:
+                          nullable: true
+                          type: string
+                        useAciCniPriorityClass:
+                          nullable: true
+                          type: string
+                        useHostNetnsVolume:
+                          nullable: true
+                          type: string
+                        useOpflexServerVolume:
+                          nullable: true
+                          type: string
+                        usePrivilegedContainer:
+                          nullable: true
+                          type: string
+                        vmmController:
+                          nullable: true
+                          type: string
+                        vmmDomain:
+                          nullable: true
+                          type: string
+                        vrfName:
+                          nullable: true
+                          type: string
+                        vrfTenant:
+                          nullable: true
+                          type: string
+                      type: object
                     calicoNetworkProvider:
                       nullable: true
                       properties:
@@ -1573,6 +2033,27 @@ spec:
                     plugin:
                       nullable: true
                       type: string
+                    tolerations:
+                      items:
+                        properties:
+                          effect:
+                            nullable: true
+                            type: string
+                          key:
+                            nullable: true
+                            type: string
+                          operator:
+                            nullable: true
+                            type: string
+                          tolerationSeconds:
+                            nullable: true
+                            type: integer
+                          value:
+                            nullable: true
+                            type: string
+                        type: object
+                      nullable: true
+                      type: array
                     updateStrategy:
                       nullable: true
                       properties:
@@ -1706,6 +2187,8 @@ spec:
                       nullable: true
                       type: array
                   type: object
+                rotateEncryptionKey:
+                  type: boolean
                 services:
                   properties:
                     etcd:
@@ -1747,6 +2230,8 @@ spec:
                               type: object
                             safeTimestamp:
                               type: boolean
+                            timeout:
+                              type: integer
                           type: object
                         caCert:
                           nullable: true
@@ -1800,6 +2285,24 @@ spec:
                           type: boolean
                         uid:
                           type: integer
+                        winExtraArgs:
+                          additionalProperties:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: object
+                        winExtraBinds:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
+                        winExtraEnv:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
                       type: object
                     kubeApi:
                       properties:
@@ -2105,6 +2608,24 @@ spec:
                         serviceNodePortRange:
                           nullable: true
                           type: string
+                        winExtraArgs:
+                          additionalProperties:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: object
+                        winExtraBinds:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
+                        winExtraEnv:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
                       type: object
                     kubeController:
                       properties:
@@ -2135,6 +2656,24 @@ spec:
                         serviceClusterIpRange:
                           nullable: true
                           type: string
+                        winExtraArgs:
+                          additionalProperties:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: object
+                        winExtraBinds:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
+                        winExtraEnv:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
                       type: object
                     kubelet:
                       properties:
@@ -2172,6 +2711,24 @@ spec:
                         infraContainerImage:
                           nullable: true
                           type: string
+                        winExtraArgs:
+                          additionalProperties:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: object
+                        winExtraBinds:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
+                        winExtraEnv:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
                       type: object
                     kubeproxy:
                       properties:
@@ -2196,6 +2753,24 @@ spec:
                         image:
                           nullable: true
                           type: string
+                        winExtraArgs:
+                          additionalProperties:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: object
+                        winExtraBinds:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
+                        winExtraEnv:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
                       type: object
                     scheduler:
                       properties:
@@ -2220,6 +2795,24 @@ spec:
                         image:
                           nullable: true
                           type: string
+                        winExtraArgs:
+                          additionalProperties:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: object
+                        winExtraBinds:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
+                        winExtraEnv:
+                          items:
+                            nullable: true
+                            type: string
+                          nullable: true
+                          type: array
                       type: object
                   type: object
                 sshAgentAuth:
@@ -2232,6 +2825,30 @@ spec:
                   type: string
                 systemImages:
                   properties:
+                    aciCniDeployContainer:
+                      nullable: true
+                      type: string
+                    aciControllerContainer:
+                      nullable: true
+                      type: string
+                    aciGbpServerContainer:
+                      nullable: true
+                      type: string
+                    aciHostContainer:
+                      nullable: true
+                      type: string
+                    aciMcastContainer:
+                      nullable: true
+                      type: string
+                    aciOpflexContainer:
+                      nullable: true
+                      type: string
+                    aciOpflexServerContainer:
+                      nullable: true
+                      type: string
+                    aciOvsContainer:
+                      nullable: true
+                      type: string
                     alpine:
                       nullable: true
                       type: string
@@ -2251,6 +2868,9 @@ spec:
                       nullable: true
                       type: string
                     canalCni:
+                      nullable: true
+                      type: string
+                    canalControllers:
                       nullable: true
                       type: string
                     canalFlannel:
@@ -2330,6 +2950,7 @@ spec:
                   nullable: true
                   properties:
                     drain:
+                      nullable: true
                       type: boolean
                     maxUnavailableControlplane:
                       nullable: true
@@ -2353,6 +2974,9 @@ spec:
                           type: integer
                       type: object
                   type: object
+                winPrefixPath:
+                  nullable: true
+                  type: string
               type: object
             referencedConfig:
               nullable: true

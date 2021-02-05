@@ -111,7 +111,8 @@ func Register(
 	})
 
 	h.tokenCache.AddIndexer(byAgentUser, func(obj *v3.Token) ([]string, error) {
-		if obj.Labels["authn.management.cattle.io/kind"] != "agent" {
+		// for rancher releases before 2.3 the label is not available, use name lookup too
+		if obj.Labels["authn.management.cattle.io/kind"] != "agent" && !strings.HasPrefix(obj.Name, "agent-") {
 			return nil, nil
 		}
 		return []string{obj.UserID}, nil

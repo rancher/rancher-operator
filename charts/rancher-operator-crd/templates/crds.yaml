@@ -624,6 +624,9 @@ spec:
                         ipAddress:
                           nullable: true
                           type: string
+                        nodeLocalDnsPriorityClassName:
+                          nullable: true
+                          type: string
                         nodeSelector:
                           additionalProperties:
                             nullable: true
@@ -644,6 +647,12 @@ spec:
                               nullable: true
                               type: string
                           type: object
+                      type: object
+                    options:
+                      additionalProperties:
+                        nullable: true
+                        type: string
+                      nullable: true
                       type: object
                     provider:
                       nullable: true
@@ -716,6 +725,9 @@ spec:
                     defaultBackend:
                       nullable: true
                       type: boolean
+                    defaultHttpBackendPriorityClassName:
+                      nullable: true
+                      type: string
                     dnsPolicy:
                       nullable: true
                       type: string
@@ -1678,6 +1690,9 @@ spec:
                     networkMode:
                       nullable: true
                       type: string
+                    nginxIngressControllerPriorityClassName:
+                      nullable: true
+                      type: string
                     nodeSelector:
                       additionalProperties:
                         nullable: true
@@ -1734,6 +1749,9 @@ spec:
                   type: string
                 monitoring:
                   properties:
+                    metricsServerPriorityClassName:
+                      nullable: true
+                      type: string
                     nodeSelector:
                       additionalProperties:
                         nullable: true

@@ -2,6 +2,7 @@ package settings
 
 import (
 	mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
+	apierror "k8s.io/apimachinery/pkg/api/errors"
 )
 
 func GetServerURLAndCA(settings mgmtcontrollers.SettingCache) (string, string, error) {
@@ -16,6 +17,16 @@ func GetServerURLAndCA(settings mgmtcontrollers.SettingCache) (string, string, e
 	}
 
 	return server.Value, cacert.Value, nil
+}
+
+func Bool(settings mgmtcontrollers.SettingCache, key string) (bool, error) {
+	val, err := Get(settings, key)
+	if apierror.IsNotFound(err) {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	return val == "true", nil
 }
 
 func Get(settings mgmtcontrollers.SettingCache, key string) (string, error) {

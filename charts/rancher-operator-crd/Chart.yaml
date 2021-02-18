@@ -1,11 +1,14 @@
 apiVersion: v2
 name: rancher-operator-crd
 description: Rancher Operator CustomResourceDefinitions
-version: 0.0.0
-appVersion: 0.0.0
+version: 999
+appVersion: 999
 annotations:
   catalog.cattle.io/certified: rancher
   catalog.cattle.io/hidden: "true"
   catalog.cattle.io/namespace: rancher-operator-system
   catalog.cattle.io/release-name: rancher-operator-crd
   catalog.cattle.io/os: linux
+dependencies:
+- name: capi
+  condition: capi.enabled

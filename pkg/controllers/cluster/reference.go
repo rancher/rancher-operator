@@ -27,14 +27,14 @@ func (h *handler) referenceCluster(cluster *v1.Cluster, status v1.ClusterStatus)
 
 func (h *handler) claimCluster(cluster *v1.Cluster, status v1.ClusterStatus) (*v3.Cluster, error) {
 	if status.ClusterName != "" {
-		return h.rclusterCache.Get(status.ClusterName)
+		return h.mgmtClusterCache.Get(status.ClusterName)
 	}
 
 	if cluster.Spec.ReferencedConfig.Selector == nil {
 		return nil, fmt.Errorf("missing selector for referenced cluster %s/%s", cluster.Namespace, cluster.Name)
 	}
 
-	claimed, err := h.rclusterCache.List(labels.SelectorFromSet(map[string]string{
+	claimed, err := h.mgmtClusterCache.List(labels.SelectorFromSet(map[string]string{
 		claimedLabelName:      cluster.Name,
 		claimedLabelNamespace: cluster.Namespace,
 	}))
@@ -56,7 +56,7 @@ func (h *handler) claimCluster(cluster *v1.Cluster, status v1.ClusterStatus) (*v
 		return nil, err
 	}
 
-	available, err := h.rclusterCache.List(sel)
+	available, err := h.mgmtClusterCache.List(sel)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (h *handler) claimCluster(cluster *v1.Cluster, status v1.ClusterStatus) (*v
 		}
 		updated.Labels[claimedLabelName] = cluster.Name
 		updated.Labels[claimedLabelNamespace] = cluster.Namespace
-		return h.rclusters.Update(updated)
+		return h.mgmtClusters.Update(updated)
 	}
 
 	if len(available) == 0 {
@@ -88,7 +88,7 @@ func (h *handler) claimCluster(cluster *v1.Cluster, status v1.ClusterStatus) (*v
 			copy := available.DeepCopy()
 			delete(copy.Labels, claimedLabelNamespace)
 			delete(copy.Labels, claimedLabelName)
-			_, err := h.rclusters.Update(copy)
+			_, err := h.mgmtClusters.Update(copy)
 			if err != nil {
 				return nil, err
 			}

@@ -14,7 +14,7 @@ import (
 
 func RegisterRoleTemplate(ctx context.Context, clients *clients.Clients) {
 	v12.RegisterRoleTemplateGeneratingHandler(ctx,
-		clients.RoleTemplate(),
+		clients.Cluster.RoleTemplate(),
 		clients.Apply.
 			WithCacheTypes(clients.Management.RoleTemplate()),
 		"",

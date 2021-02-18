@@ -13,6 +13,14 @@ spec:
     spec:
       containers:
       - env:
+        - name: STAMP
+          value: "{{.Values.stamp}}"
+        - name: SKIP_CRDS
+          value: "true"
+        - name: ENABLE_CAPI
+          value: "{{ .Values.capi.enabled }}"
+        - name: ENABLE_RKE
+          value: "{{ .Values.rke.enabled }}"
         - name: NAMESPACE
           valueFrom:
             fieldRef:

@@ -39,7 +39,7 @@ func (h *handler) importCluster(cluster *v1.Cluster, status v1.ClusterStatus, sp
 }
 
 func (h *handler) deployAgent(cluster *v1.Cluster, status v1.ClusterStatus) (bool, error) {
-	if _, err := h.rclusterCache.Get(status.ClusterName); apierror.IsNotFound(err) {
+	if _, err := h.mgmtClusterCache.Get(status.ClusterName); apierror.IsNotFound(err) {
 		h.clusters.EnqueueAfter(cluster.Namespace, cluster.Name, 2*time.Second)
 		// wait until the cluster is created
 		return false, nil

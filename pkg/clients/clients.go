@@ -1,40 +1,28 @@
 package clients
 
 import (
-	"context"
-
-	"github.com/rancher/rancher-operator/pkg/crd"
+	"github.com/rancher/rancher-operator/pkg/generated/controllers/cluster.x-k8s.io"
+	capicontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/cluster.x-k8s.io/v1alpha4"
 	"github.com/rancher/rancher-operator/pkg/generated/controllers/fleet.cattle.io"
 	fleetcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"
 	"github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io"
 	mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/rancher-operator/pkg/generated/controllers/rancher.cattle.io"
 	rocontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/rancher.cattle.io/v1"
+	"github.com/rancher/rancher-operator/pkg/generated/controllers/rke.cattle.io"
+	rkecontroller "github.com/rancher/rancher-operator/pkg/generated/controllers/rke.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/clients"
-	"github.com/rancher/wrangler/pkg/start"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 type Clients struct {
 	*clients.Clients
-	rocontrollers.Interface
 
+	Cluster    rocontrollers.Interface
 	Management mgmtcontrollers.Interface
+	CAPI       capicontrollers.Interface
+	RKE        rkecontroller.Interface
 	Fleet      fleetcontrollers.Interface
-
-	starters []start.Starter
-}
-
-func (a *Clients) Start(ctx context.Context) error {
-	if err := crd.Create(ctx, a.RESTConfig); err != nil {
-		return err
-	}
-
-	if err := a.Clients.Start(ctx); err != nil {
-		return err
-	}
-
-	return start.All(ctx, 5, a.starters...)
 }
 
 func New(clientConfig clientcmd.ClientConfig) (*Clients, error) {
@@ -43,30 +31,16 @@ func New(clientConfig clientcmd.ClientConfig) (*Clients, error) {
 		return nil, err
 	}
 
-	rancher, err := rancher.NewFactoryFromConfig(clients.RESTConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	mgmt, err := management.NewFactoryFromConfig(clients.RESTConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	fleet, err := fleet.NewFactoryFromConfig(clients.RESTConfig)
-	if err != nil {
-		return nil, err
+	opts := &fleet.FactoryOptions{
+		SharedControllerFactory: clients.SharedControllerFactory,
 	}
 
 	return &Clients{
 		Clients:    clients,
-		Interface:  rancher.Rancher().V1(),
-		Management: mgmt.Management().V3(),
-		Fleet:      fleet.Fleet().V1alpha1(),
-		starters: []start.Starter{
-			rancher,
-			mgmt,
-			fleet,
-		},
+		CAPI:       cluster.NewFactoryFromConfigWithOptionsOrDie(clients.RESTConfig, opts).Cluster().V1alpha4(),
+		RKE:        rke.NewFactoryFromConfigWithOptionsOrDie(clients.RESTConfig, opts).Rke().V1(),
+		Cluster:    rancher.NewFactoryFromConfigWithOptionsOrDie(clients.RESTConfig, opts).Rancher().V1(),
+		Management: management.NewFactoryFromConfigWithOptionsOrDie(clients.RESTConfig, opts).Management().V3(),
+		Fleet:      fleet.NewFactoryFromConfigWithOptionsOrDie(clients.RESTConfig, opts).Fleet().V1alpha1(),
 	}, nil
 }

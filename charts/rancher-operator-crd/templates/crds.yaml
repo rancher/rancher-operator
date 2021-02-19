@@ -353,8 +353,8 @@ spec:
                         nullable: true
                         type: boolean
                     required:
-                    - nodeConfig
                     - name
+                    - nodeConfig
                     type: object
                   nullable: true
                   type: array

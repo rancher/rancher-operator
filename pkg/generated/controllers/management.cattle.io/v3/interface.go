@@ -33,7 +33,12 @@ type Interface interface {
 	Cluster() ClusterController
 	ClusterRegistrationToken() ClusterRegistrationTokenController
 	ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController
+	DynamicSchema() DynamicSchemaController
 	FleetWorkspace() FleetWorkspaceController
+	Node() NodeController
+	NodeDriver() NodeDriverController
+	NodePool() NodePoolController
+	NodeTemplate() NodeTemplateController
 	Project() ProjectController
 	ProjectRoleTemplateBinding() ProjectRoleTemplateBindingController
 	RoleTemplate() RoleTemplateController
@@ -61,8 +66,23 @@ func (c *version) ClusterRegistrationToken() ClusterRegistrationTokenController 
 func (c *version) ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController {
 	return NewClusterRoleTemplateBindingController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "ClusterRoleTemplateBinding"}, "clusterroletemplatebindings", true, c.controllerFactory)
 }
+func (c *version) DynamicSchema() DynamicSchemaController {
+	return NewDynamicSchemaController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "DynamicSchema"}, "dynamicschemas", false, c.controllerFactory)
+}
 func (c *version) FleetWorkspace() FleetWorkspaceController {
 	return NewFleetWorkspaceController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "FleetWorkspace"}, "fleetworkspaces", false, c.controllerFactory)
+}
+func (c *version) Node() NodeController {
+	return NewNodeController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Node"}, "nodes", true, c.controllerFactory)
+}
+func (c *version) NodeDriver() NodeDriverController {
+	return NewNodeDriverController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "NodeDriver"}, "nodedrivers", false, c.controllerFactory)
+}
+func (c *version) NodePool() NodePoolController {
+	return NewNodePoolController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "NodePool"}, "nodepools", true, c.controllerFactory)
+}
+func (c *version) NodeTemplate() NodeTemplateController {
+	return NewNodeTemplateController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "NodeTemplate"}, "nodetemplates", true, c.controllerFactory)
 }
 func (c *version) Project() ProjectController {
 	return NewProjectController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}, "projects", true, c.controllerFactory)

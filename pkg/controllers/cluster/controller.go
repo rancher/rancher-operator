@@ -2,52 +2,38 @@ package cluster
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	"github.com/rancher/norman/types/convert"
 	v1 "github.com/rancher/rancher-operator/pkg/apis/rancher.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/clients"
 	mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
 	rocontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/rancher.cattle.io/v1"
-	"github.com/rancher/rancher-operator/pkg/settings"
+	"github.com/rancher/rancher-operator/pkg/kubeconfig"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/condition"
-	appcontroller "github.com/rancher/wrangler/pkg/generated/controllers/apps/v1"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/rancher/wrangler/pkg/kstatus"
 	"github.com/rancher/wrangler/pkg/name"
 	"github.com/rancher/wrangler/pkg/relatedresource"
-	corev1 "k8s.io/api/core/v1"
 	apierror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/clientcmd"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 const (
-	byPrincipal = "by-principal"
-	byAgentUser = "by-agent-user"
-	byCluster   = "by-cluster"
-
-	systemNamespace = "cattle-system"
+	byCluster = "by-cluster"
 )
 
 type handler struct {
 	rclusterCache     mgmtcontrollers.ClusterCache
 	rclusters         mgmtcontrollers.ClusterClient
-	deploymentCache   appcontroller.DeploymentCache
-	daemonsetCache    appcontroller.DaemonSetCache
 	clusterTokenCache mgmtcontrollers.ClusterRegistrationTokenCache
 	clusterTokens     mgmtcontrollers.ClusterRegistrationTokenClient
 	clusters          rocontrollers.ClusterController
-	tokenCache        mgmtcontrollers.TokenCache
-	userCache         mgmtcontrollers.UserCache
 	secretCache       corecontrollers.SecretCache
-	settings          mgmtcontrollers.SettingCache
+	kubeconfigManager *kubeconfig.Manager
 }
 
 func Register(
@@ -56,15 +42,11 @@ func Register(
 	h := handler{
 		rclusterCache:     clients.Management.Cluster().Cache(),
 		rclusters:         clients.Management.Cluster(),
-		daemonsetCache:    clients.Apps.DaemonSet().Cache(),
-		deploymentCache:   clients.Apps.Deployment().Cache(),
 		clusterTokenCache: clients.Management.ClusterRegistrationToken().Cache(),
 		clusterTokens:     clients.Management.ClusterRegistrationToken(),
 		clusters:          clients.Cluster(),
-		tokenCache:        clients.Management.Token().Cache(),
-		userCache:         clients.Management.User().Cache(),
 		secretCache:       clients.Core.Secret().Cache(),
-		settings:          clients.Management.Setting().Cache(),
+		kubeconfigManager: kubeconfig.New(clients),
 	}
 
 	clients.Cluster().OnChange(ctx, "cluster-update", h.onChange)
@@ -104,18 +86,6 @@ func Register(
 			return nil, nil
 		}
 		return []string{obj.Status.ClusterName}, nil
-	})
-
-	h.userCache.AddIndexer(byPrincipal, func(obj *v3.User) ([]string, error) {
-		return obj.PrincipalIDs, nil
-	})
-
-	h.tokenCache.AddIndexer(byAgentUser, func(obj *v3.Token) ([]string, error) {
-		// for rancher releases before 2.3 the label is not available, use name lookup too
-		if obj.Labels["authn.management.cattle.io/kind"] != "agent" && !strings.HasPrefix(obj.Name, "agent-") {
-			return nil, nil
-		}
-		return []string{obj.UserID}, nil
 	})
 }
 
@@ -218,107 +188,15 @@ func (h *handler) updateStatus(objs []runtime.Object, cluster *v1.Cluster, statu
 	}
 
 	if status.Ready {
-		secretName, secret, err := h.getKubeConfig(cluster, status)
+		secret, err := h.kubeconfigManager.GetKubeConfig(cluster, status)
 		if err != nil {
 			return nil, status, err
 		}
 		if secret != nil {
 			objs = append(objs, secret)
 		}
-		status.ClientSecretName = secretName
+		status.ClientSecretName = secret.Name
 	}
 
 	return objs, status, nil
-}
-
-func (h *handler) getKubeConfig(cluster *v1.Cluster, status v1.ClusterStatus) (string, *corev1.Secret, error) {
-	var (
-		name       = cluster.Name + "-kubeconfig"
-		tokenValue = ""
-	)
-
-	if cluster.Spec.ImportedConfig != nil && cluster.Spec.ImportedConfig.KubeConfigSecret == name {
-		return name, nil, nil
-	}
-
-	users, err := h.userCache.GetByIndex(byPrincipal, fmt.Sprintf("system://%s", status.ClusterName))
-	if err != nil {
-		return "", nil, err
-	}
-
-	for _, user := range users {
-		tokens, err := h.tokenCache.GetByIndex(byAgentUser, user.Name)
-		if err != nil {
-			return "", nil, err
-		}
-		for _, token := range tokens {
-			tokenValue = fmt.Sprintf("%s:%s", token.Name, token.Token)
-		}
-	}
-
-	if tokenValue == "" {
-		return "", nil, fmt.Errorf("failed to find token for cluster %s", status.ClusterName)
-	}
-
-	serverURL, cacert, err := h.getServerURLAndCA()
-	if err != nil {
-		return "", nil, err
-	}
-
-	data, err := clientcmd.Write(clientcmdapi.Config{
-		Clusters: map[string]*clientcmdapi.Cluster{
-			"cluster": {
-				Server:                   fmt.Sprintf("%s/k8s/clusters/%s", serverURL, status.ClusterName),
-				CertificateAuthorityData: []byte(strings.TrimSpace(cacert)),
-			},
-		},
-		AuthInfos: map[string]*clientcmdapi.AuthInfo{
-			"user": {
-				Token: tokenValue,
-			},
-		},
-		Contexts: map[string]*clientcmdapi.Context{
-			"default": {
-				Cluster:  "cluster",
-				AuthInfo: "user",
-			},
-		},
-		CurrentContext: "default",
-	})
-	if err != nil {
-		return "", nil, err
-	}
-
-	return name, &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: cluster.Namespace,
-			Name:      name,
-		},
-		Data: map[string][]byte{
-			"value": data,
-		},
-	}, nil
-}
-
-func (h *handler) getServerURLAndCA() (string, string, error) {
-	serverURL, ca, err := settings.GetServerURLAndCA(h.settings)
-	if err != nil {
-		return "", "", err
-	}
-
-	tlsSecret, err := h.secretCache.Get(systemNamespace, "tls-rancher-internal-ca")
-	if err != nil {
-		return "", "", err
-	}
-	internalCA := string(tlsSecret.Data[corev1.TLSCertKey])
-
-	if dp, err := h.deploymentCache.Get(systemNamespace, "rancher"); err == nil && dp.Spec.Replicas != nil && *dp.Spec.Replicas != 0 {
-		return fmt.Sprintf("https://rancher.%s", systemNamespace), internalCA, nil
-	}
-
-	if _, err := h.daemonsetCache.Get(systemNamespace, "rancher"); err == nil {
-		return fmt.Sprintf("https://rancher.%s", systemNamespace), internalCA, nil
-	}
-
-	return serverURL, ca, nil
 }

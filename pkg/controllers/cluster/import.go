@@ -94,7 +94,7 @@ func (h *handler) deploy(cluster *v1.Cluster, secretNamespace, secretName string
 		return err
 	}
 
-	serverURL, cacert, err := h.getServerURLAndCA()
+	serverURL, cacert, err := h.kubeconfigManager.GetServerURLAndCA()
 	if err != nil {
 		return err
 	}

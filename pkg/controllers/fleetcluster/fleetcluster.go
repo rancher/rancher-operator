@@ -2,6 +2,7 @@ package fleetcluster
 
 import (
 	"context"
+	"errors"
 
 	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	v1 "github.com/rancher/rancher-operator/pkg/apis/rancher.cattle.io/v1"
@@ -32,7 +33,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 	h := &handler{
 		settings: clients.Management.Setting().Cache(),
 		clusters: clients.Management.Cluster(),
-		apply:    clients.Apply.WithCacheTypes(clients.Cluster()),
+		apply:    clients.Apply.WithCacheTypes(clients.Cluster.Cluster()),
 	}
 
 	clients.Management.Cluster().OnChange(ctx, "fleet-cluster-label", h.addLabel)
@@ -40,7 +41,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 		clients.Management.Cluster(),
 		clients.Apply.
 			WithCacheTypes(clients.Fleet.Cluster(),
-				clients.Cluster()),
+				clients.Cluster.Cluster()),
 		"",
 		"fleet-cluster",
 		h.createCluster,
@@ -60,7 +61,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 			}}, nil
 		}
 		return nil, nil
-	}, clients.Management.Cluster(), clients.Cluster())
+	}, clients.Management.Cluster(), clients.Cluster.Cluster())
 }
 
 func (h *handler) addLabel(key string, cluster *mgmt.Cluster) (*mgmt.Cluster, error) {
@@ -133,7 +134,7 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 		objs          []runtime.Object
 	)
 
-	if owningCluster, err := h.apply.FindOwner(cluster); err == apply.ErrOwnerNotFound {
+	if owningCluster, err := h.apply.FindOwner(cluster); errors.Is(err, apply.ErrOwnerNotFound) || errors.Is(err, apply.ErrNoInformerFound) {
 	} else if err != nil {
 		return nil, status, err
 	} else if rCluster, ok := owningCluster.(*v1.Cluster); ok {

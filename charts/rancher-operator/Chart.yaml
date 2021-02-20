@@ -1,8 +1,8 @@
 apiVersion: v2
 name: rancher-operator
 description: Control Rancher using GitOps
-version: 0.0.0
-appVersion: 0.0.0
+version: 999
+appVersion: 999
 annotations:
   catalog.cattle.io/auto-install: rancher-operator-crd=match
   catalog.cattle.io/certified: rancher

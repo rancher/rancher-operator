@@ -1,6 +1,10 @@
 package settings
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"strings"
+
 	mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
 	apierror "k8s.io/apimachinery/pkg/api/errors"
 )
@@ -38,4 +42,20 @@ func Get(settings mgmtcontrollers.SettingCache, key string) (string, error) {
 		return server.Default, nil
 	}
 	return server.Value, nil
+}
+
+func GetServerURLAndCAChecksum(settings mgmtcontrollers.SettingCache) (string, string, error) {
+	url, ca, err := GetServerURLAndCA(settings)
+	if err != nil {
+		return "", "", err
+	}
+
+	if ca != "" {
+		if !strings.HasSuffix(ca, "\n") {
+			ca += "\n"
+		}
+		digest := sha256.Sum256([]byte(ca))
+		return url, hex.EncodeToString(digest[:]), nil
+	}
+	return url, "", nil
 }

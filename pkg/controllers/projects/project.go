@@ -21,13 +21,13 @@ type handler struct {
 
 func Register(ctx context.Context, clients *clients.Clients) {
 	h := handler{
-		clusterCache:      clients.Cluster().Cache(),
-		projectCache:      clients.Project().Cache(),
-		projectController: clients.Project(),
+		clusterCache:      clients.Cluster.Cluster().Cache(),
+		projectCache:      clients.Cluster.Project().Cache(),
+		projectController: clients.Cluster.Project(),
 	}
 
 	rocontrollers.RegisterProjectGeneratingHandler(ctx,
-		clients.Project(),
+		clients.Cluster.Project(),
 		clients.Apply.
 			WithCacheTypes(clients.Management.Project()),
 		"",
@@ -35,7 +35,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 		h.onProject,
 		nil)
 
-	clients.Cluster().OnChange(ctx, "project-cluster-trigger", h.onCluster)
+	clients.Cluster.Cluster().OnChange(ctx, "project-cluster-trigger", h.onCluster)
 }
 
 func Projects(prj *v1.Project, clusterCache rocontrollers.ClusterCache) ([]*v3.Project, error) {

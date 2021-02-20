@@ -23,13 +23,13 @@ type handler struct {
 
 func Register(ctx context.Context, clients *clients.Clients, lookup *principals.Lookup) {
 	h := handler{
-		clusters: clients.Cluster().Cache(),
-		projects: clients.Project().Cache(),
+		clusters: clients.Cluster.Cluster().Cache(),
+		projects: clients.Cluster.Project().Cache(),
 		lookup:   lookup,
 	}
 
 	rocontrollers.RegisterRoleTemplateBindingGeneratingHandler(ctx,
-		clients.RoleTemplateBinding(),
+		clients.Cluster.RoleTemplateBinding(),
 		clients.Apply.
 			WithCacheTypes(clients.Management.ClusterRoleTemplateBinding(),
 				clients.Management.ProjectRoleTemplateBinding()),

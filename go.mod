@@ -8,10 +8,10 @@ require (
 	github.com/rancher/eks-operator v1.0.6-rc1
 	github.com/rancher/fleet/pkg/apis v0.0.0-20210203165831-44af1553b47e
 	github.com/rancher/lasso v0.0.0-20200905045615-7fcb07d6a20b
-	github.com/rancher/norman v0.0.0-20200930000340-693d65aaffe3
-	github.com/rancher/rancher/pkg/apis v0.0.0-20210207181037-4cb2ebe259c0
-	github.com/rancher/rancher/pkg/client v0.0.0-20210207181037-4cb2ebe259c0
-	github.com/rancher/rke v1.2.6-rc4.0.20210205231142-0e2db503c5a2
+	github.com/rancher/norman v0.0.0-20210219183327-731b8482505c
+	github.com/rancher/rancher/pkg/apis v0.0.0-20210222182625-a85f4d1f87fe
+	github.com/rancher/rancher/pkg/client v0.0.0-20210222182625-a85f4d1f87fe
+	github.com/rancher/rke v1.2.6-rc5
 	github.com/rancher/wrangler v0.7.3-0.20201028210318-d73835950c29
 	github.com/sirupsen/logrus v1.6.0
 	github.com/urfave/cli v1.22.2

@@ -1835,7 +1835,7 @@ spec:
                         apicUserName:
                           nullable: true
                           type: string
-                        cApic:
+                        capic:
                           nullable: true
                           type: string
                         controllerLogLevel:
@@ -1892,13 +1892,13 @@ spec:
                         kafkaClientKey:
                           nullable: true
                           type: string
-                        kubeAPIVlan:
+                        kubeApiVlan:
                           nullable: true
                           type: string
-                        l3Out:
+                        l3out:
                           nullable: true
                           type: string
-                        l3OutExternalNetworks:
+                        l3outExternalNetworks:
                           items:
                             nullable: true
                             type: string
@@ -1922,7 +1922,7 @@ spec:
                         nodeSvcSubnet:
                           nullable: true
                           type: string
-                        opflexClientSSL:
+                        opflexClientSsl:
                           nullable: true
                           type: string
                         opflexLogLevel:
@@ -1934,7 +1934,7 @@ spec:
                         opflexServerPort:
                           nullable: true
                           type: string
-                        overlayVRFName:
+                        overlayVrfName:
                           nullable: true
                           type: string
                         ovsMemoryLimit:
@@ -1985,7 +1985,7 @@ spec:
                         token:
                           nullable: true
                           type: string
-                        useAciAnywhereCRD:
+                        useAciAnywhereCrd:
                           nullable: true
                           type: string
                         useAciCniPriorityClass:

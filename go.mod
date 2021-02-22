@@ -10,9 +10,9 @@ require (
 	github.com/rancher/fleet/pkg/apis v0.0.0-20210203165831-44af1553b47e
 	github.com/rancher/lasso v0.0.0-20210219163000-fcdfcec12969
 	github.com/rancher/lasso/controller-runtime v0.0.0-20210219163000-fcdfcec12969
-	github.com/rancher/norman v0.0.0-20210219160735-4b01fa823545
-	github.com/rancher/rancher/pkg/apis v0.0.0-20210219041911-44129f287e3c
-	github.com/rancher/rancher/pkg/client v0.0.0-20210219041911-44129f287e3c
+	github.com/rancher/norman v0.0.0-20210219183327-731b8482505c
+	github.com/rancher/rancher/pkg/apis v0.0.0-20210222182625-a85f4d1f87fe
+	github.com/rancher/rancher/pkg/client v0.0.0-20210222182625-a85f4d1f87fe
 	github.com/rancher/wrangler v0.7.3-0.20210220051046-ee3e0fff1d40
 	github.com/sirupsen/logrus v1.6.0
 	github.com/urfave/cli v1.22.2

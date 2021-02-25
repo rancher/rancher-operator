@@ -508,8 +508,8 @@ github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40T
 github.com/qri-io/starlib v0.4.2-0.20200213133954-ff2e8cd5ef8d/go.mod h1:7DPO4domFU579Ga6E61sB9VFNaniPVwJP5C4bBCu3wA=
 github.com/rancher/eks-operator v1.0.6-rc1 h1:VY2lLcaHtBMByd7pq7px4fB+GW0cd0cfessODbmH+Tc=
 github.com/rancher/eks-operator v1.0.6-rc1/go.mod h1:GB2kyPtIN0r+DGlUcDgEUMsB4qRwZH7OKsraemZT+GA=
-github.com/rancher/fleet/pkg/apis v0.0.0-20210203165831-44af1553b47e h1:nZEZIUamgb+vdcFmhTgvldFe3B+PTVrMoxim3Gbw0qs=
-github.com/rancher/fleet/pkg/apis v0.0.0-20210203165831-44af1553b47e/go.mod h1:eS2Pvcv56JtrTVe2ND7rISrg1eDrshr9S+W/fV96hMw=
+github.com/rancher/fleet/pkg/apis v0.0.0-20210225010648-40ee92df4aea h1:KdEUTvpfzP9BQ+AVY7hr1KiRBkyX8+9qnVXr0IklAHI=
+github.com/rancher/fleet/pkg/apis v0.0.0-20210225010648-40ee92df4aea/go.mod h1:eS2Pvcv56JtrTVe2ND7rISrg1eDrshr9S+W/fV96hMw=
 github.com/rancher/lasso v0.0.0-20200427171700-e0509f89f319/go.mod h1:6Dw19z1lDIpL887eelVjyqH/mna1hfR61ddCFOG78lw=
 github.com/rancher/lasso v0.0.0-20200515155337-a34e1e26ad91/go.mod h1:G6Vv2aj6xB2YjTVagmu4NkhBvbE8nBcGykHRENH6arI=
 github.com/rancher/lasso v0.0.0-20200820172840-0e4cc0ef5cb0 h1:ng7i8n0kzTGnXyvVK+nkb+sLm06BBNdsbd2aqJAP3lM=

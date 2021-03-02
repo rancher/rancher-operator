@@ -154,11 +154,7 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 			},
 			Spec: v1.ClusterSpec{
 				ReferencedConfig: &v1.ReferencedConfig{
-					Selector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							clusterName: cluster.Name,
-						},
-					},
+					ManagementClusterName: cluster.Name,
 				},
 			},
 		})

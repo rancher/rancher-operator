@@ -1,7 +1,6 @@
 package v1
 
 import (
-	eksv1 "github.com/rancher/eks-operator/pkg/apis/eks.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -17,13 +16,13 @@ type Cluster struct {
 }
 
 type ClusterSpec struct {
-	ControlPlaneEndpoint      *Endpoint                   `json:"controlPlaneEndpoint,omitempty"`
-	EKSConfig                 *eksv1.EKSClusterConfigSpec `json:"eksConfig,omitempty"`
-	ImportedConfig            *ImportedConfig             `json:"importedConfig,omitempty"`
-	ReferencedConfig          *ReferencedConfig           `json:"referencedConfig,omitempty"`
-	CloudCredentialSecretName string                      `json:"cloudCredentialSecretName,omitempty"`
-	KubernetesVersion         string                      `json:"kubernetesVersion,omitempty"`
-	RKEConfig                 *RKEConfig                  `json:"rkeConfig,omitempty"`
+	CloudCredentialSecretName string `json:"cloudCredentialSecretName,omitempty"`
+	KubernetesVersion         string `json:"kubernetesVersion,omitempty"`
+
+	ClusterAPIConfig *ClusterAPIConfig `json:"clusterAPIConfig,omitempty"`
+	ImportedConfig   *ImportedConfig   `json:"importedConfig,omitempty"`
+	RKEConfig        *RKEConfig        `json:"rkeConfig,omitempty"`
+	ReferencedConfig *ReferencedConfig `json:"referencedConfig,omitempty"`
 }
 
 type ClusterStatus struct {
@@ -36,14 +35,13 @@ type ClusterStatus struct {
 }
 
 type ImportedConfig struct {
-	KubeConfigSecret string `json:"kubeConfigSecret,omitempty"`
+	KubeConfigSecretName string `json:"kubeConfigSecretName,omitempty"`
+}
+
+type ClusterAPIConfig struct {
+	ClusterName string `json:"clusterName,omitempty"`
 }
 
 type ReferencedConfig struct {
-	Selector *metav1.LabelSelector `json:"selector,omitempty"`
-}
-
-type Endpoint struct {
-	Host string `json:"host,omitempty"`
-	Port int    `json:"port,omitempty"`
+	ManagementClusterName string `json:"managementClusterName,omitempty"`
 }

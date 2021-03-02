@@ -7,12 +7,14 @@ import (
 	"github.com/rancher/lasso/pkg/dynamic"
 	rancherv1 "github.com/rancher/rancher-operator/pkg/apis/rancher.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1"
+	mgmtcontroller "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/rancher-operator/pkg/planner"
 	"github.com/rancher/rancher-operator/pkg/util"
 	"github.com/rancher/wrangler/pkg/data/convert"
 	"github.com/rancher/wrangler/pkg/gvk"
 	"github.com/rancher/wrangler/pkg/name"
 	corev1 "k8s.io/api/core/v1"
+	apierror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -20,14 +22,14 @@ import (
 	capi "sigs.k8s.io/cluster-api/api/v1alpha4"
 )
 
-func objects(cluster *rancherv1.Cluster, dynamic *dynamic.Controller) (result []runtime.Object, _ error) {
+func objects(cluster *rancherv1.Cluster, dynamic *dynamic.Controller, dynamicSchema mgmtcontroller.DynamicSchemaCache) (result []runtime.Object, _ error) {
 	rkeCluster := rkeCluster(cluster)
 	result = append(result, rkeCluster)
 
 	capiCluster := capiCluster(cluster, rkeCluster)
 	result = append(result, capiCluster)
 
-	machineDeployments, err := machineDeployments(cluster, capiCluster, dynamic)
+	machineDeployments, err := machineDeployments(cluster, capiCluster, dynamic, dynamicSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +38,25 @@ func objects(cluster *rancherv1.Cluster, dynamic *dynamic.Controller) (result []
 	return result, nil
 }
 
-func toMachineTemplate(nodePoolName string, cluster *rancherv1.Cluster, nodePool rancherv1.RKENodePool, dynamic *dynamic.Controller) (runtime.Object, error) {
+func pruneBySchema(kind string, data map[string]interface{}, dynamicSchema mgmtcontroller.DynamicSchemaCache) error {
+	ds, err := dynamicSchema.Get(strings.ToLower(kind))
+	if apierror.IsNotFound(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	for k := range data {
+		if _, ok := ds.Spec.ResourceFields[k]; !ok {
+			delete(data, k)
+		}
+	}
+
+	return nil
+}
+
+func toMachineTemplate(nodePoolName string, cluster *rancherv1.Cluster, nodePool rancherv1.RKENodePool,
+	dynamic *dynamic.Controller, dynamicSchema mgmtcontroller.DynamicSchemaCache) (runtime.Object, error) {
 	apiVersion := nodePool.NodeConfig.APIVersion
 	kind := nodePool.NodeConfig.Kind
 	if apiVersion == "" {
@@ -54,14 +74,15 @@ func toMachineTemplate(nodePoolName string, cluster *rancherv1.Cluster, nodePool
 		return nil, err
 	}
 
+	if err := pruneBySchema(gvk.Kind, nodePoolData, dynamicSchema); err != nil {
+		return nil, err
+	}
+
 	commonData, err := convert.EncodeToMap(nodePool.RKECommonNodeConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	delete(nodePoolData, "metadata")
-	delete(nodePoolData, "kind")
-	delete(nodePoolData, "apiVersion")
 	nodePoolData.Set("common", commonData)
 
 	return &unstructured.Unstructured{
@@ -81,7 +102,8 @@ func toMachineTemplate(nodePoolName string, cluster *rancherv1.Cluster, nodePool
 	}, nil
 }
 
-func machineDeployments(cluster *rancherv1.Cluster, capiCluster *capi.Cluster, dynamic *dynamic.Controller) (result []runtime.Object, _ error) {
+func machineDeployments(cluster *rancherv1.Cluster, capiCluster *capi.Cluster, dynamic *dynamic.Controller,
+	dynamicSchema mgmtcontroller.DynamicSchemaCache) (result []runtime.Object, _ error) {
 	bootstrapName := name.SafeConcatName(cluster.Name, "bootstrap", "template")
 
 	if len(cluster.Spec.RKEConfig.NodePools) > 0 {
@@ -100,7 +122,7 @@ func machineDeployments(cluster *rancherv1.Cluster, capiCluster *capi.Cluster, d
 
 		nodePoolName := name.SafeConcatName(cluster.Name, "nodepool", nodePool.Name)
 
-		machineTemplate, err := toMachineTemplate(nodePoolName, cluster, nodePool, dynamic)
+		machineTemplate, err := toMachineTemplate(nodePoolName, cluster, nodePool, dynamic, dynamicSchema)
 		if err != nil {
 			return nil, err
 		}

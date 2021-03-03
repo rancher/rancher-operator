@@ -34,6 +34,7 @@ type handler struct {
 	clusterTokenCache mgmtcontrollers.ClusterRegistrationTokenCache
 	clusterTokens     mgmtcontrollers.ClusterRegistrationTokenClient
 	clusters          rocontrollers.ClusterController
+	clusterCache      rocontrollers.ClusterCache
 	secretCache       corecontrollers.SecretCache
 	kubeconfigManager *kubeconfig.Manager
 }
@@ -47,6 +48,7 @@ func Register(
 		clusterTokenCache: clients.Management.ClusterRegistrationToken().Cache(),
 		clusterTokens:     clients.Management.ClusterRegistrationToken(),
 		clusters:          clients.Cluster.Cluster(),
+		clusterCache:      clients.Cluster.Cluster().Cache(),
 		secretCache:       clients.Core.Secret().Cache(),
 		kubeconfigManager: kubeconfig.New(clients),
 	}
@@ -65,58 +67,45 @@ func Register(
 		},
 	)
 	clients.Management.Cluster().OnChange(ctx, "cluster-watch", h.createToken)
-	clients.Cluster.Cluster().OnChange(ctx, "cluster-watch", h.onChange)
-
 	clusterCache := clients.Cluster.Cluster().Cache()
-	relatedresource.Watch(ctx, "cluster-watch", func(namespace, name string, obj runtime.Object) ([]relatedresource.Key, error) {
-		cluster, ok := obj.(*v3.Cluster)
-		if !ok {
-			return nil, nil
-		}
-		operatorClusters, err := clusterCache.GetByIndex(byCluster, cluster.Name)
-		if err != nil || len(operatorClusters) == 0 {
-			// ignore
-			return nil, nil
-		}
-		return []relatedresource.Key{
-			{
-				Namespace: operatorClusters[0].Namespace,
-				Name:      operatorClusters[0].Name,
-			},
-		}, nil
-	}, clients.Cluster.Cluster(), clients.Management.Cluster())
+	relatedresource.Watch(ctx, "cluster-watch", h.clusterWatch,
+		clients.Cluster.Cluster(), clients.Management.Cluster())
 
-	clusterCache.AddIndexer(byCluster, func(obj *v1.Cluster) ([]string, error) {
-		if obj.Status.ClusterName == "" {
-			return nil, nil
-		}
-		return []string{obj.Status.ClusterName}, nil
-	})
+	clusterCache.AddIndexer(byCluster, byClusterIndex)
+	clients.Cluster.Cluster().Informer().GetIndexer().ListKeys()
 }
 
-func (h *handler) onChange(key string, cluster *v1.Cluster) (*v1.Cluster, error) {
-	if cluster == nil {
-		return cluster, nil
+func byClusterIndex(obj *v1.Cluster) ([]string, error) {
+	if obj.Status.ClusterName == "" {
+		return nil, nil
 	}
+	return []string{obj.Status.ClusterName}, nil
+}
 
-	if cluster.Spec.ControlPlaneEndpoint == nil {
-		// just set to something, this doesn't really make sense to me
-		cluster = cluster.DeepCopy()
-		cluster.Spec.ControlPlaneEndpoint = &v1.Endpoint{
-			Host: "localhost",
-			Port: 6443,
-		}
-		return h.clusters.Update(cluster)
+func (h *handler) clusterWatch(namespace, name string, obj runtime.Object) ([]relatedresource.Key, error) {
+	cluster, ok := obj.(*v3.Cluster)
+	if !ok {
+		return nil, nil
 	}
-	return cluster, nil
+	operatorClusters, err := h.clusterCache.GetByIndex(byCluster, cluster.Name)
+	if err != nil || len(operatorClusters) == 0 {
+		// ignore
+		return nil, nil
+	}
+	return []relatedresource.Key{
+		{
+			Namespace: operatorClusters[0].Namespace,
+			Name:      operatorClusters[0].Name,
+		},
+	}, nil
 }
 
 func (h *handler) generateCluster(cluster *v1.Cluster, status v1.ClusterStatus) ([]runtime.Object, v1.ClusterStatus, error) {
 	switch {
+	case cluster.Spec.ClusterAPIConfig != nil:
+		return h.capiCluster(cluster, status)
 	case cluster.Spec.ImportedConfig != nil:
-		return h.importCluster(cluster, status, v3.ClusterSpec{
-			ImportedConfig: &v3.ImportedConfig{},
-		})
+		return h.importCluster(cluster, status)
 	default:
 		return h.createCluster(cluster, status, v3.ClusterSpec{
 			ImportedConfig: &v3.ImportedConfig{},

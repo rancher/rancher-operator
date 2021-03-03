@@ -30,7 +30,7 @@ type RKEClusterSpecCommon struct {
 type RKESystemConfig struct {
 	MachineName          string                `json:"machineName,omitempty"`
 	MachineLabelSelector *metav1.LabelSelector `json:"machineLabelSelector,omitempty"`
-	Config               GenericMap
+	Config               GenericMap            `json:"config,omitempty"`
 }
 
 type RKEClusterSpec struct {

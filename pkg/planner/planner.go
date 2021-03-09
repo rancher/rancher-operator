@@ -333,11 +333,11 @@ func (p *Planner) loadClusterAgent(cluster *rkev1.RKECluster) ([]byte, error) {
 		return nil, err
 	}
 
-	for _, token := range tokens {
-		return DownloadClusterAgentYAML(p.ctx, url, ca, token.Status.Token)
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("no cluster registration token found")
 	}
 
-	return nil, fmt.Errorf("no cluster registration token found")
+	return DownloadClusterAgentYAML(p.ctx, url, ca, tokens[0].Status.Token, cluster.Spec.ManagementClusterName)
 }
 
 func (p *Planner) kubernetesVersionToImage(version string) string {

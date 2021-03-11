@@ -5,6 +5,8 @@ go 1.15
 replace k8s.io/client-go => k8s.io/client-go v0.20.0
 
 require (
+	github.com/evanphx/json-patch v4.9.0+incompatible
+	github.com/go-logr/logr v0.3.0
 	github.com/rancher/eks-operator v1.0.6-rc1
 	github.com/rancher/fleet/pkg/apis v0.0.0-20210225010648-40ee92df4aea
 	github.com/rancher/lasso v0.0.0-20200905045615-7fcb07d6a20b

@@ -2,8 +2,10 @@ package fleetcluster
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
+	jsonpatch "github.com/evanphx/json-patch"
 	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	v1 "github.com/rancher/rancher-operator/pkg/apis/rancher.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/clients"
@@ -16,6 +18,7 @@ import (
 	"github.com/rancher/wrangler/pkg/yaml"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
@@ -70,9 +73,13 @@ func (h *handler) addLabel(key string, cluster *mgmt.Cluster) (*mgmt.Cluster, er
 	}
 
 	if cluster.Spec.Internal && cluster.Spec.FleetWorkspaceName == "" {
-		cluster = cluster.DeepCopy()
-		cluster.Spec.FleetWorkspaceName = "fleet-local"
-		return h.clusters.Update(cluster)
+		newCluster := cluster.DeepCopy()
+		newCluster.Spec.FleetWorkspaceName = "fleet-local"
+		patch, err := generatePatch(cluster, newCluster)
+		if err != nil {
+			return cluster, err
+		}
+		return h.clusters.Patch(cluster.Name, types.MergePatchType, patch)
 	} else if cluster.Spec.Internal {
 		return cluster, nil
 	}
@@ -87,9 +94,13 @@ func (h *handler) addLabel(key string, cluster *mgmt.Cluster) (*mgmt.Cluster, er
 			return cluster, nil
 		}
 
-		cluster = cluster.DeepCopy()
-		cluster.Spec.FleetWorkspaceName = def
-		cluster, err = h.clusters.Update(cluster)
+		newCluster := cluster.DeepCopy()
+		newCluster.Spec.FleetWorkspaceName = def
+		patch, err := generatePatch(cluster, newCluster)
+		if err != nil {
+			return cluster, err
+		}
+		cluster, err = h.clusters.Patch(cluster.Name, types.MergePatchType, patch)
 		if err != nil {
 			return nil, err
 		}
@@ -100,12 +111,17 @@ func (h *handler) addLabel(key string, cluster *mgmt.Cluster) (*mgmt.Cluster, er
 	}
 
 	if cluster.Labels[clusterName] != cluster.Name {
-		cluster = cluster.DeepCopy()
-		if cluster.Labels == nil {
-			cluster.Labels = map[string]string{}
+		newCluster := cluster.DeepCopy()
+		if newCluster.Labels == nil {
+			newCluster.Labels = map[string]string{}
 		}
-		cluster.Labels[clusterName] = cluster.Name
-		return h.clusters.Update(cluster)
+		newCluster.Labels[clusterName] = cluster.Name
+		patch, err := generatePatch(cluster, newCluster)
+		if err != nil {
+			return cluster, err
+		}
+
+		return h.clusters.Patch(cluster.Name, types.MergePatchType, patch)
 	}
 
 	return cluster, nil
@@ -173,4 +189,18 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 	})
 
 	return objs, status, nil
+}
+
+func generatePatch(old, new *mgmt.Cluster) ([]byte, error) {
+	oldData, err := json.Marshal(old)
+	if err != nil {
+		return nil, err
+	}
+
+	newData, err := json.Marshal(new)
+	if err != nil {
+		return nil, err
+	}
+
+	return jsonpatch.CreateMergePatch(oldData, newData)
 }

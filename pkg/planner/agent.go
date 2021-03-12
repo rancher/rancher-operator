@@ -2,6 +2,7 @@ package planner
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -9,7 +10,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func DownloadClusterAgentYAML(ctx context.Context, url, ca string, token string) ([]byte, error) {
+func DownloadClusterAgentYAML(ctx context.Context, url, ca string, token, clusterID string) ([]byte, error) {
 	client, err := rest.RESTClientFor(&rest.Config{
 		ContentConfig: rest.ContentConfig{
 			GroupVersion:         &schema.GroupVersion{},
@@ -24,5 +25,5 @@ func DownloadClusterAgentYAML(ctx context.Context, url, ca string, token string)
 		return nil, err
 	}
 
-	return client.Get().AbsPath("v3", "import", token+".yaml").Do(ctx).Raw()
+	return client.Get().AbsPath("v3", "import", fmt.Sprintf("%v_%v.yaml", token, clusterID)).Do(ctx).Raw()
 }

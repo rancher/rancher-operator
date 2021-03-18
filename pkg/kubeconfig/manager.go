@@ -215,7 +215,7 @@ func (m *Manager) GetKubeConfig(cluster *v1.Cluster, status v1.ClusterStatus) (*
 		return nil, err
 	}
 
-	serverURL, cacert, err := m.GetServerURLAndCA()
+	serverURL, cacert, err := settings.GetInternalServerURLAndCA(m.settings)
 	if err != nil {
 		return nil, err
 	}
@@ -254,27 +254,4 @@ func (m *Manager) GetKubeConfig(cluster *v1.Cluster, status v1.ClusterStatus) (*
 			"token": []byte(tokenValue),
 		},
 	}, nil
-}
-
-func (m *Manager) GetServerURLAndCA() (string, string, error) {
-	serverURL, ca, err := settings.GetServerURLAndCA(m.settings)
-	if err != nil {
-		return "", "", err
-	}
-
-	tlsSecret, err := m.secretCache.Get(systemNamespace, "tls-rancher-internal-ca")
-	if err != nil {
-		return "", "", err
-	}
-	internalCA := string(tlsSecret.Data[corev1.TLSCertKey])
-
-	if dp, err := m.deploymentCache.Get(systemNamespace, "rancher"); err == nil && dp.Spec.Replicas != nil && *dp.Spec.Replicas != 0 {
-		return fmt.Sprintf("https://rancher.%s", systemNamespace), internalCA, nil
-	}
-
-	if _, err := m.daemonsetCache.Get(systemNamespace, "rancher"); err == nil {
-		return fmt.Sprintf("https://rancher.%s", systemNamespace), internalCA, nil
-	}
-
-	return serverURL, ca, nil
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	v1 "github.com/rancher/rancher-operator/pkg/apis/rancher.cattle.io/v1"
+	"github.com/rancher/rancher-operator/pkg/settings"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/apply"
 	"github.com/rancher/wrangler/pkg/generic"
@@ -105,7 +106,7 @@ func (h *handler) deploy(cluster *v1.Cluster, secretNamespace, secretName string
 		return err
 	}
 
-	serverURL, cacert, err := h.kubeconfigManager.GetServerURLAndCA()
+	serverURL, cacert, err := settings.GetInternalServerURLAndCA(h.settings)
 	if err != nil {
 		return err
 	}

@@ -2,17 +2,22 @@ module github.com/rancher/rancher-operator
 
 go 1.15
 
-replace k8s.io/client-go => k8s.io/client-go v0.20.2
+replace (
+	k8s.io/client-go => k8s.io/client-go v0.20.2
+	sigs.k8s.io/cluster-api => github.com/rancher/cluster-api v0.3.11-0.20210219162658-745452a60720
+)
 
 require (
 	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/go-logr/logr v0.3.0
+	github.com/gorilla/mux v1.7.3
 	github.com/rancher/fleet/pkg/apis v0.0.0-20210225010648-40ee92df4aea
 	github.com/rancher/lasso v0.0.0-20210219163000-fcdfcec12969
 	github.com/rancher/lasso/controller-runtime v0.0.0-20210219163000-fcdfcec12969
 	github.com/rancher/norman v0.0.0-20210219183327-731b8482505c
 	github.com/rancher/rancher/pkg/apis v0.0.0-20210222182625-a85f4d1f87fe
 	github.com/rancher/rancher/pkg/client v0.0.0-20210222182625-a85f4d1f87fe
+	github.com/rancher/steve v0.0.0-20210318171316-376934558c5b
 	github.com/rancher/wrangler v0.7.3-0.20210220051046-ee3e0fff1d40
 	github.com/sirupsen/logrus v1.6.0
 	github.com/urfave/cli v1.22.2
@@ -23,5 +28,3 @@ require (
 	sigs.k8s.io/cluster-api v0.0.0
 	sigs.k8s.io/controller-runtime v0.8.2
 )
-
-replace sigs.k8s.io/cluster-api => github.com/rancher/cluster-api v0.3.11-0.20210219162658-745452a60720

@@ -5,12 +5,14 @@ import (
 	"fmt"
 
 	"github.com/rancher/lasso/pkg/dynamic"
+	rkev1 "github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/clients"
 	capicontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/cluster.x-k8s.io/v1alpha4"
 	rkecontroller "github.com/rancher/rancher-operator/pkg/generated/controllers/rke.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/planner"
 	"github.com/rancher/rancher-operator/pkg/util"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/wrangler/pkg/condition"
 	corev1 "k8s.io/api/core/v1"
 	apierror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -64,19 +66,19 @@ func (h *handler) OnChange(key string, node *v3.Node) (*v3.Node, error) {
 	}
 
 	for _, machine := range machines {
-		if ok, err := h.sameCluster(node, machine); apierror.IsNotFound(err) {
+		if ok, cluster, err := h.sameCluster(node, machine); apierror.IsNotFound(err) {
 			return node, nil
 		} else if err != nil {
 			return node, err
 		} else if ok {
-			return node, h.updateMachine(node, machine)
+			return node, h.updateMachine(cluster, node, machine)
 		}
 	}
 
 	return node, nil
 }
 
-func (h *handler) updateMachineJoinURL(node *v3.Node, machine *capi.Machine) error {
+func (h *handler) updateMachineJoinURL(cluster *rkev1.RKECluster, node *v3.Node, machine *capi.Machine) error {
 	address := ""
 	for _, nodeAddress := range node.Status.InternalNodeStatus.Addresses {
 		switch nodeAddress.Type {
@@ -89,7 +91,7 @@ func (h *handler) updateMachineJoinURL(node *v3.Node, machine *capi.Machine) err
 		}
 	}
 
-	url := fmt.Sprintf("https://%s:6443", address)
+	url := fmt.Sprintf("https://%s:%d", address, planner.GetJoinURLPort(cluster))
 	if machine.Annotations[planner.JoinURLAnnotation] == url {
 		return nil
 	}
@@ -104,8 +106,8 @@ func (h *handler) updateMachineJoinURL(node *v3.Node, machine *capi.Machine) err
 	return err
 }
 
-func (h *handler) updateMachine(node *v3.Node, machine *capi.Machine) error {
-	if err := h.updateMachineJoinURL(node, machine); err != nil {
+func (h *handler) updateMachine(cluster *rkev1.RKECluster, node *v3.Node, machine *capi.Machine) error {
+	if err := h.updateMachineJoinURL(cluster, node, machine); err != nil {
 		return err
 	}
 
@@ -133,27 +135,39 @@ func (h *handler) updateMachine(node *v3.Node, machine *capi.Machine) error {
 			Object: data,
 		})
 		return err
+	} else if machine.Status.NodeRef == nil && node.Spec.InternalNodeSpec.ProviderID == "" &&
+		node.Status.NodeName != "" &&
+		condition.Cond("Ready").IsTrue(&node.Status.InternalNodeStatus) {
+
+		machine := machine.DeepCopy()
+		machine.Status.NodeRef = &corev1.ObjectReference{
+			Kind:       "Node",
+			Name:       node.Status.NodeName,
+			APIVersion: "v1",
+		}
+		_, err := h.machines.UpdateStatus(machine)
+		return err
 	}
 
 	return nil
 }
 
-func (h *handler) sameCluster(node *v3.Node, machine *capi.Machine) (bool, error) {
+func (h *handler) sameCluster(node *v3.Node, machine *capi.Machine) (bool, *rkev1.RKECluster, error) {
 	capiCluster, err := h.capiClusterCache.Get(machine.Namespace, machine.Spec.ClusterName)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
 	if capiCluster.Spec.InfrastructureRef == nil ||
 		capiCluster.Spec.InfrastructureRef.APIVersion != "rke.cattle.io/v1" ||
 		capiCluster.Spec.InfrastructureRef.Kind != "RKECluster" {
-		return false, nil
+		return false, nil, nil
 	}
 
 	rkeCluster, err := h.rkeClusterCache.Get(machine.Namespace, capiCluster.Spec.InfrastructureRef.Name)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
-	return rkeCluster.Spec.ManagementClusterName == node.Namespace, nil
+	return rkeCluster.Spec.ManagementClusterName == node.Namespace, rkeCluster, nil
 }

@@ -27,6 +27,7 @@ var (
 	GitCommit     = "HEAD"
 	KubeConfig    string
 	Context       string
+	Namespace     string
 	WriteCRDs     string
 	WriteCAPICRDs string
 	EnableCAPI    bool
@@ -48,6 +49,12 @@ func main() {
 			Name:        "context",
 			EnvVar:      "CONTEXT",
 			Destination: &Context,
+		},
+		cli.StringFlag{
+			Name:        "namespace",
+			EnvVar:      "NAMESPACE",
+			Destination: &Namespace,
+			Value:       "rancher-operator-system",
 		},
 		cli.StringFlag{
 			Name:        "write-crds",
@@ -99,7 +106,7 @@ func run(c *cli.Context) error {
 	ctx := signals.SetupSignalHandler(context.Background())
 	clientConfig := kubeconfig.GetNonInteractiveClientConfigWithContext(KubeConfig, Context)
 
-	if err := controllers.Register(ctx, EnableCAPI, EnableRKE, !SkipCRD, clientConfig); err != nil {
+	if err := controllers.Register(ctx, EnableCAPI, EnableRKE, !SkipCRD, Namespace, clientConfig); err != nil {
 		return err
 	}
 

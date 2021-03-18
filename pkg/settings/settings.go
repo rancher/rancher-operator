@@ -23,6 +23,20 @@ func GetServerURLAndCA(settings mgmtcontrollers.SettingCache) (string, string, e
 	return server.Value, cacert.Value, nil
 }
 
+func GetInternalServerURLAndCA(settings mgmtcontrollers.SettingCache) (string, string, error) {
+	server, err := settings.Get("internal-server-url")
+	if err != nil {
+		return "", "", err
+	}
+
+	cacert, err := settings.Get("internal-cacerts")
+	if err != nil {
+		return "", "", err
+	}
+
+	return server.Value, cacert.Value, nil
+}
+
 func Bool(settings mgmtcontrollers.SettingCache, key string) (bool, error) {
 	val, err := Get(settings, key)
 	if apierror.IsNotFound(err) {
@@ -58,4 +72,15 @@ func GetServerURLAndCAChecksum(settings mgmtcontrollers.SettingCache) (string, s
 		return url, hex.EncodeToString(digest[:]), nil
 	}
 	return url, "", nil
+}
+
+func PrefixPrivateRegistry(settings mgmtcontrollers.SettingCache, image string) (string, error) {
+	private, err := Get(settings, "system-default-registry")
+	if err != nil {
+		return "", err
+	}
+	if private == "" {
+		return image, nil
+	}
+	return private + "/" + strings.TrimPrefix(image, "docker.io/"), nil
 }

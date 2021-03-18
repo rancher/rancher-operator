@@ -36,6 +36,7 @@ type handler struct {
 	clusters          rocontrollers.ClusterController
 	clusterCache      rocontrollers.ClusterCache
 	secretCache       corecontrollers.SecretCache
+	settings          mgmtcontrollers.SettingCache
 	kubeconfigManager *kubeconfig.Manager
 }
 
@@ -47,6 +48,7 @@ func Register(
 		mgmtClusters:      clients.Management.Cluster(),
 		clusterTokenCache: clients.Management.ClusterRegistrationToken().Cache(),
 		clusterTokens:     clients.Management.ClusterRegistrationToken(),
+		settings:          clients.Management.Setting().Cache(),
 		clusters:          clients.Cluster.Cluster(),
 		clusterCache:      clients.Cluster.Cluster().Cache(),
 		secretCache:       clients.Core.Secret().Cache(),

@@ -10,20 +10,39 @@ import (
 	"github.com/rancher/rancher-operator/pkg/settings"
 )
 
-func Bootstrap(settingsCache mgmtcontroller.SettingCache, token string) ([]byte, error) {
-	url, err := settings.Get(settingsCache, "agent-install-script")
+var (
+	defaultSystemAgentInstallScript = "https://raw.githubusercontent.com/rancher/system-agent/main/install.sh"
+	localAgentInstallScript         = "./install.sh"
+)
+
+func InstallScript(settingsCache mgmtcontroller.SettingCache) ([]byte, error) {
+	url, err := settings.Get(settingsCache, "system-agent-install-script")
 	if err != nil {
 		return nil, err
 	}
-	script, err := ioutil.ReadFile(url)
-	if os.IsNotExist(err) {
-		resp, httpErr := http.Get(url)
-		if httpErr != nil {
-			return nil, httpErr
+
+	if url == "" {
+		script, err := ioutil.ReadFile(localAgentInstallScript)
+		if !os.IsNotExist(err) {
+			return script, err
 		}
-		defer resp.Body.Close()
-		script, err = ioutil.ReadAll(resp.Body)
 	}
+
+	if url == "" {
+		url = defaultSystemAgentInstallScript
+	}
+
+	resp, httpErr := http.Get(url)
+	if httpErr != nil {
+		return nil, httpErr
+	}
+	defer resp.Body.Close()
+
+	return ioutil.ReadAll(resp.Body)
+}
+
+func Bootstrap(settingsCache mgmtcontroller.SettingCache, token string) ([]byte, error) {
+	script, err := InstallScript(settingsCache)
 	if err != nil {
 		return nil, err
 	}

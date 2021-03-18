@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	rkev1 "github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1/plan"
@@ -14,6 +15,7 @@ import (
 	capicontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/cluster.x-k8s.io/v1alpha4"
 	mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/rancher-operator/pkg/kubeconfig"
+	"github.com/rancher/rancher-operator/pkg/settings"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/name"
@@ -41,6 +43,9 @@ const (
 
 	LabelsAnnotation = "rke.cattle.io/labels"
 	TaintsAnnotation = "rke.cattle.io/taints"
+
+	RuntimeK3S  = "k3s"
+	RuntimeRKE2 = "rke2"
 )
 
 var (
@@ -120,11 +125,7 @@ func (p *Planner) Process(cluster *rkev1.RKECluster) (rkev1.RKEClusterStatus, er
 		return cluster.Status, err
 	}
 
-	ok, err = p.reconcile(cluster, secret, plan, isOnlyWorker, isInitNode, cluster.Spec.UpgradeStrategy.WorkerConcurrency, joinServer)
-	if err != nil || !ok {
-		return cluster.Status, err
-	}
-
+	_, err = p.reconcile(cluster, secret, plan, isOnlyWorker, isInitNode, cluster.Spec.UpgradeStrategy.WorkerConcurrency, joinServer)
 	return cluster.Status, err
 }
 
@@ -155,7 +156,7 @@ func (p *Planner) setInitNodeMark(machine *capi.Machine) (*capi.Machine, error) 
 }
 
 func (p *Planner) electInitNode(plan *plan.Plan) (string, error) {
-	entries, _ := collect(plan, isEtcd, none)
+	entries, _ := collect(plan, isEtcd)
 	joinURL := ""
 	for _, entry := range entries {
 		if !isInitNode(entry.Machine) {
@@ -188,10 +189,15 @@ func (p *Planner) electInitNode(plan *plan.Plan) (string, error) {
 }
 
 func (p *Planner) reconcile(cluster *rkev1.RKECluster, secret plan.Secret, plan *plan.Plan, include, exclude roleFilter, concurrency int, joinServer string) (bool, error) {
-	entries, unavailable := collect(plan, include, exclude)
+	entries, unavailable := collect(plan, include)
 
 	allInSync := true
 	for _, entry := range entries {
+		// we exclude here and not in collect to ensure that include matched at least on node
+		if exclude(entry.Machine) {
+			continue
+		}
+
 		plan, err := p.desiredPlan(cluster, secret, entry, isInitNode(entry.Machine), joinServer)
 		if err != nil {
 			return false, err
@@ -235,8 +241,13 @@ func (p *Planner) desiredPlan(cluster *rkev1.RKECluster, secret plan.Secret, ent
 	}
 
 	if initNode {
-		config["cluster-init"] = true
+		if GetRuntime(cluster) == RuntimeK3S {
+			config["cluster-init"] = true
+		}
 	} else {
+		// it's very important that the joinServer param isn't used on the initNode because that would
+		// cause the plan to evaluate differently dependending on the arguments to desiredPlan, which
+		// should alway return the same value for the same node regardless of other arguments
 		config["server"] = joinServer
 	}
 
@@ -246,25 +257,34 @@ func (p *Planner) desiredPlan(cluster *rkev1.RKECluster, secret plan.Secret, ent
 		agent = true
 	}
 
-	if initNode {
+	runtime := GetRuntime(cluster)
+
+	if isControlPlane(entry.Machine) {
 		data, err := p.loadClusterAgent(cluster)
 		if err != nil {
 			return result, err
 		}
 		result.Files = append(result.Files, plan.File{
 			Content: base64.StdEncoding.EncodeToString(data),
-			Path:    fmt.Sprintf("/var/lib/rancher/%s/server/manifests/cluster-agent.yaml", p.getRuntime(cluster)),
+			Path:    fmt.Sprintf("/var/lib/rancher/%s/server/manifests/cluster-agent.yaml", runtime),
 		})
 	}
 
+	image, err := p.getInstallerImage(cluster)
+	if err != nil {
+		return result, err
+	}
+
 	instruction := plan.Instruction{
-		Image:   p.kubernetesVersionToImage(cluster.Spec.KubernetesVersion),
+		Image:   image,
 		Command: "sh",
-		Args:    []string{"-c", "install.sh"},
+		Args:    []string{"-c", "run.sh"},
 	}
 
 	if agent {
-		instruction.Args = []string{"agent"}
+		instruction.Env = []string{
+			fmt.Sprintf("INSTALL_%s_TYPE=agent", strings.ToUpper(runtime)),
+		}
 		config["token"] = secret.AgentToken
 	} else {
 		config["token"] = secret.ServerToken
@@ -305,21 +325,31 @@ func (p *Planner) desiredPlan(cluster *rkev1.RKECluster, secret plan.Secret, ent
 
 	result.Instructions = append(result.Instructions, instruction)
 
-	configData, err := json.Marshal(config)
+	configData, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return result, err
 	}
 
 	result.Files = append(result.Files, plan.File{
 		Content: base64.StdEncoding.EncodeToString(configData),
-		Path:    fmt.Sprintf("/etc/rancher/%s/config.yaml", p.getRuntime(cluster)),
+		Path:    fmt.Sprintf("/etc/rancher/%s/config.yaml", GetRuntime(cluster)),
 	})
 
 	return result, nil
 }
 
-func (p *Planner) getRuntime(cluster *rkev1.RKECluster) string {
-	return "k3s"
+func GetRuntime(cluster *rkev1.RKECluster) string {
+	if strings.Contains(cluster.Spec.KubernetesVersion, RuntimeK3S) {
+		return RuntimeK3S
+	}
+	return RuntimeRKE2
+}
+
+func GetJoinURLPort(cluster *rkev1.RKECluster) int {
+	if GetRuntime(cluster) == RuntimeRKE2 {
+		return 9345
+	}
+	return 6443
 }
 
 func (p *Planner) loadClusterAgent(cluster *rkev1.RKECluster) ([]byte, error) {
@@ -328,7 +358,11 @@ func (p *Planner) loadClusterAgent(cluster *rkev1.RKECluster) ([]byte, error) {
 		return nil, err
 	}
 
-	url, ca, err := p.kubeconfig.GetServerURLAndCA()
+	sort.Slice(tokens, func(i, j int) bool {
+		return tokens[i].Name < tokens[j].Name
+	})
+
+	url, ca, err := settings.GetInternalServerURLAndCA(p.settings)
 	if err != nil {
 		return nil, err
 	}
@@ -340,8 +374,19 @@ func (p *Planner) loadClusterAgent(cluster *rkev1.RKECluster) ([]byte, error) {
 	return DownloadClusterAgentYAML(p.ctx, url, ca, tokens[0].Status.Token, cluster.Spec.ManagementClusterName)
 }
 
-func (p *Planner) kubernetesVersionToImage(version string) string {
-	return "docker.io/oats87/loltgz:install-k3s"
+func (p *Planner) getInstallerImage(cluster *rkev1.RKECluster) (string, error) {
+	if true {
+		// The only working image right now
+		return "docker.io/oats87/system-agent-installer-rke2:v1.19.8-alpha1-rke2r2", nil
+	}
+
+	runtime := GetRuntime(cluster)
+	image, err := settings.Get(p.settings, "system-agent-installer-image")
+	if err != nil {
+		return "", err
+	}
+	image = image + runtime + ":" + strings.ReplaceAll(cluster.Spec.KubernetesVersion, "+", "-")
+	return settings.PrefixPrivateRegistry(p.settings, image)
 }
 
 func isEtcd(machine *capi.Machine) bool {
@@ -373,9 +418,9 @@ type planEntry struct {
 	Plan    *plan.Node
 }
 
-func collect(plan *plan.Plan, include, exclude func(*capi.Machine) bool) (result []planEntry, unavailable int) {
+func collect(plan *plan.Plan, include func(*capi.Machine) bool) (result []planEntry, unavailable int) {
 	for name, machine := range plan.Machines {
-		if !include(machine) || exclude(machine) {
+		if !include(machine) {
 			continue
 		}
 		result = append(result, planEntry{

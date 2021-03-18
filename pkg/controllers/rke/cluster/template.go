@@ -139,7 +139,10 @@ func machineDeployments(cluster *rancherv1.Cluster, capiCluster *capi.Cluster, d
 				Replicas:    nodePool.Quantity,
 				Template: capi.MachineTemplateSpec{
 					ObjectMeta: capi.ObjectMeta{
-						Labels:      map[string]string{},
+						Labels: map[string]string{
+							capi.ClusterLabelName:           capiCluster.Name,
+							capi.MachineDeploymentLabelName: nodePoolName,
+						},
 						Annotations: map[string]string{},
 					},
 					Spec: capi.MachineSpec{

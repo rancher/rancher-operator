@@ -20,13 +20,14 @@ import (
 	"github.com/rancher/rancher-operator/pkg/controllers/workspace"
 	"github.com/rancher/rancher-operator/pkg/crd"
 	"github.com/rancher/rancher-operator/pkg/principals"
+	"github.com/rancher/rancher-operator/pkg/server"
 	"github.com/rancher/wrangler/pkg/leader"
 	"github.com/rancher/wrangler/pkg/needacert"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func Register(ctx context.Context, capiEnabled, rkeEnabled, crdEnabled bool, clientConfig clientcmd.ClientConfig) error {
+func Register(ctx context.Context, capiEnabled, rkeEnabled, crdEnabled bool, systemNamespace string, clientConfig clientcmd.ClientConfig) error {
 	clients, err := clients.New(clientConfig)
 	if err != nil {
 		return err
@@ -62,6 +63,7 @@ func Register(ctx context.Context, capiEnabled, rkeEnabled, crdEnabled bool, cli
 			clients.CRD.CustomResourceDefinition())
 		planstatus.Register(ctx, clients)
 		unmanaged.Register(ctx, clients)
+		server.Register(ctx, systemNamespace, clients)
 	}
 
 	var capiStart func(context.Context) error

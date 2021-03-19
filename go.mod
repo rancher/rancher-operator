@@ -12,13 +12,13 @@ require (
 	github.com/go-logr/logr v0.3.0
 	github.com/gorilla/mux v1.7.3
 	github.com/rancher/fleet/pkg/apis v0.0.0-20210225010648-40ee92df4aea
-	github.com/rancher/lasso v0.0.0-20210219163000-fcdfcec12969
+	github.com/rancher/lasso v0.0.0-20210224225615-d687d78ea02a
 	github.com/rancher/lasso/controller-runtime v0.0.0-20210219163000-fcdfcec12969
 	github.com/rancher/norman v0.0.0-20210219183327-731b8482505c
 	github.com/rancher/rancher/pkg/apis v0.0.0-20210222182625-a85f4d1f87fe
 	github.com/rancher/rancher/pkg/client v0.0.0-20210222182625-a85f4d1f87fe
 	github.com/rancher/steve v0.0.0-20210318171316-376934558c5b
-	github.com/rancher/wrangler v0.7.3-0.20210220051046-ee3e0fff1d40
+	github.com/rancher/wrangler v0.7.3-0.20210319211136-3eba78f45e7d
 	github.com/sirupsen/logrus v1.6.0
 	github.com/urfave/cli v1.22.2
 	k8s.io/api v0.20.2

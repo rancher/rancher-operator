@@ -9,11 +9,16 @@ import (
 	"github.com/rancher/rancher-operator/pkg/controllers/rke/machine"
 	v1 "github.com/rancher/rancher-operator/pkg/generated/controllers/rke.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/planner"
+	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/rancher/wrangler/pkg/relatedresource"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha4"
+)
+
+const (
+	Provisioned = condition.Cond("Provisioned")
 )
 
 type handler struct {
@@ -46,10 +51,18 @@ func Register(ctx context.Context, clients *clients.Clients) {
 }
 
 func (h *handler) OnChange(cluster *rkev1.RKECluster, status rkev1.RKEClusterStatus) (rkev1.RKEClusterStatus, error) {
-	status, err := h.planner.Process(cluster)
-	if errors.Is(err, planner.ErrWaiting) {
-		logrus.Info(err)
+	status.ObservedGeneration = cluster.Generation
+
+	err := h.planner.Process(cluster)
+	var errWaiting planner.ErrWaiting
+	if errors.As(err, &errWaiting) {
+		logrus.Infof("rkecluster %s/%s: %v", cluster.Namespace, cluster.Name, err)
+		Provisioned.SetStatus(&status, "Unknown")
+		Provisioned.Message(&status, err.Error())
+		Provisioned.Reason(&status, "Waiting")
 		return status, nil
 	}
+
+	Provisioned.SetError(&status, "", err)
 	return status, err
 }

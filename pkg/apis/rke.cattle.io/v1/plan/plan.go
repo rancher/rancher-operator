@@ -30,7 +30,6 @@ type Instruction struct {
 	Command string   `json:"command,omitempty"`
 }
 
-// Name would be `ca.pem`, Path would be `/etc/kubernetes/ssl`, Contents is base64 encoded
 type File struct {
 	Content string `json:"content,omitempty"`
 	Name    string `json:"name,omitempty"`
@@ -40,4 +39,5 @@ type File struct {
 type NodePlan struct {
 	Files        []File        `json:"files,omitempty"`
 	Instructions []Instruction `json:"instructions,omitempty"`
+	Error        string        `json:"error,omitempty"`
 }

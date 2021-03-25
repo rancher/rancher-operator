@@ -55,7 +55,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 
 	clustercontrollers.RegisterRKEClusterStatusHandler(ctx,
 		clients.RKE.RKECluster(),
-		"",
+		"Defined",
 		"rke-cluster",
 		h.OnChange)
 
@@ -71,7 +71,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 				clients.RKE.RKECluster(),
 				clients.RKE.RKEBootstrapTemplate(),
 			),
-		"",
+		"RKECluster",
 		"rke-cluster",
 		h.OnRancherClusterChange,
 		nil)

@@ -138,16 +138,12 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 		return nil, status, generic.ErrSkip
 	}
 
-	labels := yaml.CleanAnnotationsForExport(cluster.Labels)
-	labels["management.cattle.io/cluster-name"] = cluster.Name
-	if errs := validation.IsValidLabelValue(cluster.Spec.DisplayName); len(errs) == 0 {
-		labels["management.cattle.io/cluster-display-name"] = cluster.Spec.DisplayName
-	}
-
 	var (
-		secretName    = cluster.Name + "-kubeconfig"
-		createCluster = true
-		objs          []runtime.Object
+		secretName       = cluster.Name + "-kubeconfig"
+		fleetClusterName = cluster.Name
+		rClusterName     = cluster.Name
+		createCluster    = true
+		objs             []runtime.Object
 	)
 
 	if owningCluster, err := h.apply.FindOwner(cluster); errors.Is(err, apply.ErrOwnerNotFound) || errors.Is(err, apply.ErrNoInformerFound) {
@@ -158,13 +154,22 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 			return nil, status, generic.ErrSkip
 		}
 		createCluster = false
+		fleetClusterName = rCluster.Name
+		rClusterName = rCluster.Name
 		secretName = rCluster.Status.ClientSecretName
+	}
+
+	labels := yaml.CleanAnnotationsForExport(cluster.Labels)
+	labels["management.cattle.io/cluster-name"] = cluster.Name
+	labels["cluster-name"] = rClusterName
+	if errs := validation.IsValidLabelValue(cluster.Spec.DisplayName); len(errs) == 0 {
+		labels["management.cattle.io/cluster-display-name"] = cluster.Spec.DisplayName
 	}
 
 	if createCluster {
 		objs = append(objs, &v1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      cluster.Name,
+				Name:      rClusterName,
 				Namespace: cluster.Spec.FleetWorkspaceName,
 				Labels:    labels,
 			},
@@ -178,7 +183,7 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 
 	objs = append(objs, &fleet.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name,
+			Name:      fleetClusterName,
 			Namespace: cluster.Spec.FleetWorkspaceName,
 			Labels:    labels,
 		},

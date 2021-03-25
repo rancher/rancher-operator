@@ -1,6 +1,7 @@
 package v1
 
 import (
+	v1 "github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -23,6 +24,7 @@ type ClusterSpec struct {
 	ImportedConfig   *ImportedConfig   `json:"importedConfig,omitempty"`
 	RKEConfig        *RKEConfig        `json:"rkeConfig,omitempty"`
 	ReferencedConfig *ReferencedConfig `json:"referencedConfig,omitempty"`
+	RancherValues    v1.GenericMap     `json:"rancherValues,omitempty" wrangler:"nullable"`
 }
 
 type ClusterStatus struct {

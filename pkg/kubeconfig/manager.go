@@ -27,7 +27,6 @@ const (
 	userIDLabel     = "authn.management.cattle.io/token-userId"
 	tokenKindLabel  = "authn.management.cattle.io/kind"
 	tokenHashedAnno = "authn.management.cattle.io/token-hashed"
-	systemNamespace = "cattle-system"
 
 	hashFormat = "$%d:%s:%s" // $version:salt:hash -> $1:abc:def
 	Version    = 2

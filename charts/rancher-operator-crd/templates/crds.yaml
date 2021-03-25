@@ -43,6 +43,9 @@ spec:
             kubernetesVersion:
               nullable: true
               type: string
+            rancherValues:
+              nullable: true
+              type: object
             referencedConfig:
               nullable: true
               properties:

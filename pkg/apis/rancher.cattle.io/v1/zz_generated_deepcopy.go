@@ -129,6 +129,7 @@ func (in *ClusterSpec) DeepCopyInto(out *ClusterSpec) {
 		*out = new(ReferencedConfig)
 		**out = **in
 	}
+	in.RancherValues.DeepCopyInto(&out.RancherValues)
 	return
 }
 

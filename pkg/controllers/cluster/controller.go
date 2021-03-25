@@ -55,6 +55,7 @@ func Register(
 		kubeconfigManager: kubeconfig.New(clients),
 	}
 
+	clients.Cluster.Cluster().OnChange(ctx, "cluster-label", h.addLabel)
 	rocontrollers.RegisterClusterGeneratingHandler(ctx,
 		clients.Cluster.Cluster(),
 		clients.Apply.WithCacheTypes(clients.Management.Cluster(),
@@ -82,6 +83,22 @@ func byClusterIndex(obj *v1.Cluster) ([]string, error) {
 		return nil, nil
 	}
 	return []string{obj.Status.ClusterName}, nil
+}
+
+func (h *handler) addLabel(_ string, cluster *v1.Cluster) (*v1.Cluster, error) {
+	if cluster == nil {
+		return nil, nil
+	}
+	if cluster.Labels["cluster-name"] == cluster.Name {
+		return cluster, nil
+	}
+
+	cluster = cluster.DeepCopy()
+	if cluster.Labels == nil {
+		cluster.Labels = map[string]string{}
+	}
+	cluster.Labels["cluster-name"] = cluster.Name
+	return h.clusters.Update(cluster)
 }
 
 func (h *handler) clusterWatch(namespace, name string, obj runtime.Object) ([]relatedresource.Key, error) {

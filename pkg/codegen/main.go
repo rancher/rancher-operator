@@ -25,6 +25,7 @@ func main() {
 			"fleet.cattle.io": {
 				Types: []interface{}{
 					fleet.GitRepo{},
+					fleet.Bundle{},
 					fleet.Cluster{},
 					fleet.ClusterGroup{},
 					fleet.ClusterRegistrationToken{},

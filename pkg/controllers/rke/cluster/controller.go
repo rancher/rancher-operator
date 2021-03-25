@@ -12,9 +12,10 @@ import (
 	mgmtcontroller "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
 	rocontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/rancher.cattle.io/v1"
 	clustercontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/rke.cattle.io/v1"
+	"github.com/rancher/wrangler/pkg/condition"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
-	"github.com/rancher/wrangler/pkg/kstatus"
 	corev1 "k8s.io/api/core/v1"
+	apierror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -22,6 +23,7 @@ import (
 
 const (
 	byNodeInfra = "by-node-infra"
+	Provisioned = condition.Cond("Provisioned")
 )
 
 type handler struct {
@@ -32,6 +34,7 @@ type handler struct {
 	clusterController rocontrollers.ClusterController
 	secretCache       corecontrollers.SecretCache
 	secretClient      corecontrollers.SecretClient
+	rkeClusters       clustercontrollers.RKEClusterCache
 }
 
 func Register(ctx context.Context, clients *clients.Clients) {
@@ -43,6 +46,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 		clusterClient:     clients.RKE.RKECluster(),
 		clusterCache:      clients.Cluster.Cluster().Cache(),
 		clusterController: clients.Cluster.Cluster(),
+		rkeClusters:       clients.RKE.RKECluster().Cache(),
 	}
 
 	clients.RKE.RKECluster().OnChange(ctx, "rke", h.UpdateSpec)
@@ -51,7 +55,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 
 	clustercontrollers.RegisterRKEClusterStatusHandler(ctx,
 		clients.RKE.RKECluster(),
-		"",
+		"Defined",
 		"rke-cluster",
 		h.OnChange)
 
@@ -67,7 +71,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 				clients.RKE.RKECluster(),
 				clients.RKE.RKEBootstrapTemplate(),
 			),
-		"",
+		"RKECluster",
 		"rke-cluster",
 		h.OnRancherClusterChange,
 		nil)
@@ -152,8 +156,7 @@ func (h *handler) UpdateSpec(key string, cluster *v1.RKECluster) (*v1.RKECluster
 }
 
 func (h *handler) OnChange(obj *v1.RKECluster, status v1.RKEClusterStatus) (v1.RKEClusterStatus, error) {
-	status.Ready = true
-	kstatus.SetActive(&status)
+	status.Ready = condition.Cond("Provisioned").IsTrue(&status)
 	return status, nil
 }
 
@@ -161,6 +164,26 @@ func (h *handler) OnRancherClusterChange(obj *rancherv1.Cluster, status rancherv
 	if obj.Spec.RKEConfig == nil || obj.Status.ClusterName == "" {
 		return nil, status, nil
 	}
+
+	status, err := h.updateClusterProvisioningStatus(obj, status)
+	if err != nil {
+		return nil, status, err
+	}
+
 	objs, err := objects(obj, h.dynamic, h.dynamicSchema)
 	return objs, status, err
+}
+
+func (h *handler) updateClusterProvisioningStatus(cluster *rancherv1.Cluster, status rancherv1.ClusterStatus) (rancherv1.ClusterStatus, error) {
+	rkeCluster, err := h.rkeClusters.Get(cluster.Namespace, cluster.Name)
+	if apierror.IsNotFound(err) {
+		return status, nil
+	} else if err != nil {
+		return status, err
+	}
+
+	Provisioned.SetStatus(&status, Provisioned.GetStatus(rkeCluster))
+	Provisioned.Reason(&status, Provisioned.GetReason(rkeCluster))
+	Provisioned.Message(&status, Provisioned.GetMessage(rkeCluster))
+	return status, nil
 }

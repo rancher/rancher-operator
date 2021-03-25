@@ -25,7 +25,6 @@ import (
 )
 
 const (
-	machineNameLabel = "rke.cattle.io/machine-name"
 	ClusterNameLabel = "rke.cattle.io/cluster-name"
 	roleLabel        = "rke.cattle.io/service-account-role"
 	planSecret       = "rke.cattle.io/plan-secret-name"
@@ -74,7 +73,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 
 	relatedresource.Watch(ctx, "rke-machine-trigger", func(namespace, name string, obj runtime.Object) ([]relatedresource.Key, error) {
 		if sa, ok := obj.(*corev1.ServiceAccount); ok {
-			if name, ok := sa.Labels[machineNameLabel]; ok {
+			if name, ok := sa.Labels[planner.MachineNameLabel]; ok {
 				return []relatedresource.Key{
 					{
 						Namespace: sa.Namespace,
@@ -141,10 +140,10 @@ func (h *handler) assignPlanSecret(obj *capi.Machine) ([]runtime.Object, error) 
 			Name:      secretName,
 			Namespace: obj.Namespace,
 			Labels: map[string]string{
-				ClusterNameLabel: obj.Spec.ClusterName,
-				machineNameLabel: obj.Name,
-				roleLabel:        rolePlan,
-				planSecret:       secretName,
+				ClusterNameLabel:         obj.Spec.ClusterName,
+				planner.MachineNameLabel: obj.Name,
+				roleLabel:                rolePlan,
+				planSecret:               secretName,
 			},
 		},
 	}
@@ -153,10 +152,10 @@ func (h *handler) assignPlanSecret(obj *capi.Machine) ([]runtime.Object, error) 
 			Name:      secretName,
 			Namespace: obj.Namespace,
 			Labels: map[string]string{
-				machineNameLabel: obj.Name,
+				planner.MachineNameLabel: obj.Name,
 			},
 		},
-		Type: "rke.cattle.io/machine-plan",
+		Type: planner.SecretTypeMachinePlan,
 	}
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
@@ -215,8 +214,8 @@ func (h *handler) assignBootStrapSecret(obj *capi.Machine) (*corev1.Secret, []ru
 			Name:      secretName,
 			Namespace: obj.Namespace,
 			Labels: map[string]string{
-				machineNameLabel: obj.Name,
-				roleLabel:        roleBootstrap,
+				planner.MachineNameLabel: obj.Name,
+				roleLabel:                roleBootstrap,
 			},
 		},
 	}

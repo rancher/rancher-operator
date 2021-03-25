@@ -15,13 +15,34 @@ import (
 	capi "sigs.k8s.io/cluster-api/api/v1alpha4"
 )
 
-type planStore struct {
+const (
+	NoPlanPlanStatus         PlanStatus = "NoPlan"
+	NoPlanPlanStatusMessage             = "waiting for plan to be assigned"
+	WaitingPlanStatus        PlanStatus = "Waiting"
+	WaitingPlanStatusMessage            = "waiting for plan to be applied"
+	InSyncPlanStatus         PlanStatus = "InSync"
+	InSyncPlanStatusMessage             = "plan applied"
+	ErrorStatus              PlanStatus = "Error"
+)
+
+type PlanStatus string
+
+type PlanStore struct {
 	secrets      corecontrollers.SecretClient
 	secretsCache corecontrollers.SecretCache
 	machineCache capicontrollers.MachineCache
 }
 
-func (p *planStore) Load(cluster *rkev1.RKECluster) (*plan.Plan, error) {
+func NewStore(secrets corecontrollers.SecretController,
+	machineCache capicontrollers.MachineCache) *PlanStore {
+	return &PlanStore{
+		secrets:      secrets,
+		secretsCache: secrets.Cache(),
+		machineCache: machineCache,
+	}
+}
+
+func (p *PlanStore) Load(cluster *rkev1.RKECluster) (*plan.Plan, error) {
 	result := &plan.Plan{
 		Nodes:    map[string]*plan.Node{},
 		Machines: map[string]*capi.Machine{},
@@ -45,7 +66,7 @@ func (p *planStore) Load(cluster *rkev1.RKECluster) (*plan.Plan, error) {
 	}
 
 	for machineName, secret := range secrets {
-		node, err := p.secretToNode(secret)
+		node, err := SecretToNode(secret)
 		if err != nil {
 			return nil, err
 		}
@@ -58,7 +79,20 @@ func (p *planStore) Load(cluster *rkev1.RKECluster) (*plan.Plan, error) {
 	return result, nil
 }
 
-func (p *planStore) secretToNode(secret *corev1.Secret) (*plan.Node, error) {
+func GetPlanStatusReasonMessage(plan *plan.Node) (corev1.ConditionStatus, PlanStatus, string) {
+	switch {
+	case len(plan.Plan.Instructions) == 0:
+		return corev1.ConditionUnknown, NoPlanPlanStatus, NoPlanPlanStatusMessage
+	case plan.Plan.Error != "":
+		return corev1.ConditionFalse, ErrorStatus, plan.Plan.Error
+	case plan.InSync:
+		return corev1.ConditionTrue, InSyncPlanStatus, InSyncPlanStatusMessage
+	default:
+		return corev1.ConditionUnknown, WaitingPlanStatus, WaitingPlanStatusMessage
+	}
+}
+
+func SecretToNode(secret *corev1.Secret) (*plan.Node, error) {
 	result := &plan.Node{}
 	planData := secret.Data["plan"]
 	appliedPlanData := secret.Data["appliedPlan"]
@@ -83,7 +117,7 @@ func (p *planStore) secretToNode(secret *corev1.Secret) (*plan.Node, error) {
 	return result, nil
 }
 
-func (p *planStore) getSecrets(machines []*capi.Machine) (map[string]*corev1.Secret, error) {
+func (p *PlanStore) getSecrets(machines []*capi.Machine) (map[string]*corev1.Secret, error) {
 	result := map[string]*corev1.Secret{}
 	for _, machine := range machines {
 		secret, err := p.secretsCache.Get(machine.Namespace, PlanSecretFromMachine(machine))
@@ -99,7 +133,7 @@ func (p *planStore) getSecrets(machines []*capi.Machine) (map[string]*corev1.Sec
 	return result, nil
 }
 
-func (p *planStore) UpdatePlan(machine *capi.Machine, plan plan.NodePlan) error {
+func (p *PlanStore) UpdatePlan(machine *capi.Machine, plan plan.NodePlan) error {
 	data, err := json.Marshal(plan)
 	if err != nil {
 		return err

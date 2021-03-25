@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/rancher-operator/pkg/controllers/cluster"
 	"github.com/rancher/rancher-operator/pkg/controllers/dynamicschema"
 	"github.com/rancher/rancher-operator/pkg/controllers/fleetcluster"
+	"github.com/rancher/rancher-operator/pkg/controllers/managerancher"
 	"github.com/rancher/rancher-operator/pkg/controllers/projects"
 	cluster2 "github.com/rancher/rancher-operator/pkg/controllers/rke/cluster"
 	"github.com/rancher/rancher-operator/pkg/controllers/rke/machine"
@@ -22,7 +23,6 @@ import (
 	"github.com/rancher/rancher-operator/pkg/principals"
 	"github.com/rancher/rancher-operator/pkg/server"
 	"github.com/rancher/wrangler/pkg/leader"
-	"github.com/rancher/wrangler/pkg/needacert"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -47,6 +47,7 @@ func Register(ctx context.Context, capiEnabled, rkeEnabled, crdEnabled bool, sys
 	auth.RegisterRoleTemplate(ctx, clients)
 	workspace.Register(ctx, clients)
 	fleetcluster.Register(ctx, clients)
+	managerancher.Register(ctx, clients)
 
 	if rkeEnabled {
 		dynamicschema.Register(ctx, clients)
@@ -55,12 +56,6 @@ func Register(ctx context.Context, capiEnabled, rkeEnabled, crdEnabled bool, sys
 		machine_provision.Register(ctx, clients)
 		planner.Register(ctx, clients)
 		node_reporter.Register(ctx, clients)
-		needacert.Register(ctx,
-			clients.Core.Secret(),
-			clients.Core.Service(),
-			clients.Admission.MutatingWebhookConfiguration(),
-			clients.Admission.ValidatingWebhookConfiguration(),
-			clients.CRD.CustomResourceDefinition())
 		planstatus.Register(ctx, clients)
 		unmanaged.Register(ctx, clients)
 		server.Register(ctx, systemNamespace, clients)

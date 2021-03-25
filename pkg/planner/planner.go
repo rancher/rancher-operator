@@ -20,6 +20,7 @@ import (
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/name"
 	"github.com/rancher/wrangler/pkg/randomtoken"
+	"github.com/rancher/wrangler/pkg/summary"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierror "k8s.io/apimachinery/pkg/api/errors"
@@ -46,18 +47,31 @@ const (
 
 	RuntimeK3S  = "k3s"
 	RuntimeRKE2 = "rke2"
+
+	SecretTypeMachinePlan = "rke.cattle.io/machine-plan"
 )
 
 var (
 	capiMachineLabel = "cluster.x-k8s.io/cluster-name"
-	ErrWaiting       = errors.New("waiting")
 )
+
+type ErrWaiting string
+
+func (e ErrWaiting) Error() string {
+	return string(e)
+}
+
+type errIgnore string
+
+func (e errIgnore) Error() string {
+	return string(e)
+}
 
 type roleFilter func(machine *capi.Machine) bool
 
 type Planner struct {
 	ctx                           context.Context
-	store                         *planStore
+	store                         *PlanStore
 	secretClient                  corecontrollers.SecretClient
 	secretCache                   corecontrollers.SecretCache
 	machines                      capicontrollers.MachineClient
@@ -72,11 +86,8 @@ func New(ctx context.Context, clients *clients.Clients) *Planner {
 	})
 	return &Planner{
 		ctx: ctx,
-		store: &planStore{
-			secrets:      clients.Core.Secret(),
-			secretsCache: clients.Core.Secret().Cache(),
-			machineCache: clients.CAPI.Machine().Cache(),
-		},
+		store: NewStore(clients.Core.Secret(),
+			clients.CAPI.Machine().Cache()),
 		machines:                      clients.CAPI.Machine(),
 		secretClient:                  clients.Core.Secret(),
 		secretCache:                   clients.Core.Secret().Cache(),
@@ -90,43 +101,68 @@ func PlanSecretFromMachine(obj *capi.Machine) string {
 	return name.SafeConcatName(obj.Name, "machine", "plan")
 }
 
-func (p *Planner) Process(cluster *rkev1.RKECluster) (rkev1.RKEClusterStatus, error) {
+func (p *Planner) Process(cluster *rkev1.RKECluster) error {
 	plan, err := p.store.Load(cluster)
 	if err != nil {
-		return cluster.Status, err
+		return err
 	}
 
 	cluster, secret, err := p.generateSecrets(cluster)
 	if err != nil {
-		return cluster.Status, err
+		return err
 	}
 
 	if _, err := p.electInitNode(plan); err != nil {
-		return cluster.Status, err
+		return err
 	}
 
-	ok, err := p.reconcile(cluster, secret, plan, isInitNode, none, cluster.Spec.UpgradeStrategy.ServerConcurrency, "")
-	if err != nil || !ok {
-		return cluster.Status, err
+	var firstIgnoreError error
+
+	err = p.reconcile(cluster, secret, plan, "bootstrap", isInitNode, none, cluster.Spec.UpgradeStrategy.ServerConcurrency, "")
+	firstIgnoreError, err = ignoreErrors(firstIgnoreError, err)
+	if err != nil {
+		return err
 	}
 
 	joinServer, err := p.electInitNode(plan)
 	if err != nil || joinServer == "" {
-		return cluster.Status, err
+		return err
 	}
 
-	ok, err = p.reconcile(cluster, secret, plan, isEtcd, isInitNode, cluster.Spec.UpgradeStrategy.ServerConcurrency, joinServer)
-	if err != nil || !ok {
-		return cluster.Status, err
+	err = p.reconcile(cluster, secret, plan, "etcd", isEtcd, isInitNode, cluster.Spec.UpgradeStrategy.ServerConcurrency, joinServer)
+	firstIgnoreError, err = ignoreErrors(firstIgnoreError, err)
+	if err != nil {
+		return err
 	}
 
-	ok, err = p.reconcile(cluster, secret, plan, isControlPlane, isInitNode, cluster.Spec.UpgradeStrategy.ServerConcurrency, joinServer)
-	if err != nil || !ok {
-		return cluster.Status, err
+	err = p.reconcile(cluster, secret, plan, "control plane", isControlPlane, isInitNode, cluster.Spec.UpgradeStrategy.ServerConcurrency, joinServer)
+	firstIgnoreError, err = ignoreErrors(firstIgnoreError, err)
+	if err != nil {
+		return err
 	}
 
-	_, err = p.reconcile(cluster, secret, plan, isOnlyWorker, isInitNode, cluster.Spec.UpgradeStrategy.WorkerConcurrency, joinServer)
-	return cluster.Status, err
+	err = p.reconcile(cluster, secret, plan, "worker", isOnlyWorker, isInitNode, cluster.Spec.UpgradeStrategy.WorkerConcurrency, joinServer)
+	firstIgnoreError, err = ignoreErrors(firstIgnoreError, err)
+	if err != nil {
+		return err
+	}
+
+	if firstIgnoreError != nil {
+		return ErrWaiting(firstIgnoreError.Error())
+	}
+
+	return nil
+}
+
+func ignoreErrors(firstIgnoreError error, err error) (error, error) {
+	var errIgnore errIgnore
+	if errors.As(err, &errIgnore) {
+		if firstIgnoreError == nil {
+			return err, nil
+		}
+		return firstIgnoreError, nil
+	}
+	return firstIgnoreError, err
 }
 
 func (p *Planner) CurrentPlan(cluster *rkev1.RKECluster) (*plan.Plan, error) {
@@ -188,42 +224,89 @@ func (p *Planner) electInitNode(plan *plan.Plan) (string, error) {
 	return machine.Annotations[JoinURLAnnotation], nil
 }
 
-func (p *Planner) reconcile(cluster *rkev1.RKECluster, secret plan.Secret, plan *plan.Plan, include, exclude roleFilter, concurrency int, joinServer string) (bool, error) {
+func (p *Planner) reconcile(cluster *rkev1.RKECluster, secret plan.Secret, plan *plan.Plan,
+	tierName string,
+	include, exclude roleFilter, concurrency int, joinServer string) error {
 	entries, unavailable := collect(plan, include)
 
-	allInSync := true
+	var (
+		outOfSync   []string
+		nonReady    []string
+		errMachines []string
+	)
+
 	for _, entry := range entries {
 		// we exclude here and not in collect to ensure that include matched at least on node
 		if exclude(entry.Machine) {
 			continue
 		}
 
+		summary := summary.Summarize(entry.Machine)
+		if summary.Error {
+			errMachines = append(errMachines, entry.Machine.Name)
+		}
+		if summary.Transitioning {
+			nonReady = append(nonReady, entry.Machine.Name)
+		}
+
 		plan, err := p.desiredPlan(cluster, secret, entry, isInitNode(entry.Machine), joinServer)
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		if entry.Plan == nil {
-			allInSync = false
+			outOfSync = append(outOfSync, entry.Machine.Name)
 			if err := p.store.UpdatePlan(entry.Machine, plan); err != nil {
-				return false, err
+				return err
 			}
 		} else if !equality.Semantic.DeepEqual(entry.Plan.Plan, plan) {
-			allInSync = false
+			outOfSync = append(outOfSync, entry.Machine.Name)
 			if !entry.Plan.InSync || concurrency == 0 || unavailable < concurrency {
 				if entry.Plan.InSync {
 					unavailable++
 				}
 				if err := p.store.UpdatePlan(entry.Machine, plan); err != nil {
-					return false, err
+					return err
 				}
 			}
 		} else if !entry.Plan.InSync {
-			allInSync = false
+			outOfSync = append(outOfSync, entry.Machine.Name)
 		}
 	}
 
-	return allInSync && len(entries) > 0, nil
+	if len(entries) == 0 {
+		return ErrWaiting("waiting for at least one " + tierName + " node")
+	}
+
+	errMachines = atMostThree(errMachines)
+	if len(errMachines) > 0 {
+		// we want these errors to get reported, but not block the process
+		return errIgnore("failing " + tierName + " machine(s) " + strings.Join(errMachines, ","))
+	}
+
+	outOfSync = atMostThree(outOfSync)
+	if len(outOfSync) > 0 {
+		return ErrWaiting("provisioning " + tierName + " node(s) " + strings.Join(outOfSync, ","))
+	}
+
+	nonReady = atMostThree(nonReady)
+	if len(nonReady) > 0 {
+		// we want these errors to get reported, but not block the process
+		return errIgnore("non-ready " + tierName + " machine(s) " + strings.Join(nonReady, ","))
+	}
+
+	return nil
+}
+
+func atMostThree(names []string) []string {
+	if len(names) == 0 {
+		return names
+	}
+	sort.Strings(names)
+	if len(names) > 3 {
+		names = names[:3]
+	}
+	return names
 }
 
 func (p *Planner) desiredPlan(cluster *rkev1.RKECluster, secret plan.Secret, entry planEntry, initNode bool, joinServer string) (result plan.NodePlan, _ error) {
@@ -350,28 +433,6 @@ func GetJoinURLPort(cluster *rkev1.RKECluster) int {
 		return 9345
 	}
 	return 6443
-}
-
-func (p *Planner) loadClusterAgent(cluster *rkev1.RKECluster) ([]byte, error) {
-	tokens, err := p.clusterRegistrationTokenCache.GetByIndex(clusterRegToken, cluster.Spec.ManagementClusterName)
-	if err != nil {
-		return nil, err
-	}
-
-	sort.Slice(tokens, func(i, j int) bool {
-		return tokens[i].Name < tokens[j].Name
-	})
-
-	url, ca, err := settings.GetInternalServerURLAndCA(p.settings)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(tokens) == 0 {
-		return nil, fmt.Errorf("no cluster registration token found")
-	}
-
-	return DownloadClusterAgentYAML(p.ctx, url, ca, tokens[0].Status.Token, cluster.Spec.ManagementClusterName)
 }
 
 func (p *Planner) getInstallerImage(cluster *rkev1.RKECluster) (string, error) {

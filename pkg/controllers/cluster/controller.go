@@ -122,9 +122,7 @@ func (h *handler) clusterWatch(namespace, name string, obj runtime.Object) ([]re
 func (h *handler) generateCluster(cluster *v1.Cluster, status v1.ClusterStatus) ([]runtime.Object, v1.ClusterStatus, error) {
 	switch {
 	case cluster.Spec.ClusterAPIConfig != nil:
-		return h.capiCluster(cluster, status)
-	case cluster.Spec.ImportedConfig != nil:
-		return h.importCluster(cluster, status)
+		return h.createClusterAndDeployAgent(cluster, status)
 	default:
 		return h.createCluster(cluster, status, v3.ClusterSpec{
 			ImportedConfig: &v3.ImportedConfig{},

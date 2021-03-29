@@ -114,11 +114,6 @@ func (in *ClusterSpec) DeepCopyInto(out *ClusterSpec) {
 		*out = new(ClusterAPIConfig)
 		**out = **in
 	}
-	if in.ImportedConfig != nil {
-		in, out := &in.ImportedConfig, &out.ImportedConfig
-		*out = new(ImportedConfig)
-		**out = **in
-	}
 	if in.RKEConfig != nil {
 		in, out := &in.RKEConfig, &out.RKEConfig
 		*out = new(RKEConfig)

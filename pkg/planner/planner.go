@@ -324,7 +324,7 @@ func (p *Planner) desiredPlan(cluster *rkev1.RKECluster, secret plan.Secret, ent
 	}
 
 	if initNode {
-		if GetRuntime(cluster) == RuntimeK3S {
+		if GetRuntime(cluster.Spec.KubernetesVersion) == RuntimeK3S {
 			config["cluster-init"] = true
 		}
 	} else {
@@ -340,7 +340,7 @@ func (p *Planner) desiredPlan(cluster *rkev1.RKECluster, secret plan.Secret, ent
 		agent = true
 	}
 
-	runtime := GetRuntime(cluster)
+	runtime := GetRuntime(cluster.Spec.KubernetesVersion)
 
 	if isControlPlane(entry.Machine) {
 		data, err := p.loadClusterAgent(cluster)
@@ -415,24 +415,17 @@ func (p *Planner) desiredPlan(cluster *rkev1.RKECluster, secret plan.Secret, ent
 
 	result.Files = append(result.Files, plan.File{
 		Content: base64.StdEncoding.EncodeToString(configData),
-		Path:    fmt.Sprintf("/etc/rancher/%s/config.yaml", GetRuntime(cluster)),
+		Path:    fmt.Sprintf("/etc/rancher/%s/config.yaml", GetRuntime(cluster.Spec.KubernetesVersion)),
 	})
 
 	return result, nil
 }
 
-func GetRuntime(cluster *rkev1.RKECluster) string {
-	if strings.Contains(cluster.Spec.KubernetesVersion, RuntimeK3S) {
+func GetRuntime(kubernetesVersion string) string {
+	if strings.Contains(kubernetesVersion, RuntimeK3S) {
 		return RuntimeK3S
 	}
 	return RuntimeRKE2
-}
-
-func GetJoinURLPort(cluster *rkev1.RKECluster) int {
-	if GetRuntime(cluster) == RuntimeRKE2 {
-		return 9345
-	}
-	return 6443
 }
 
 func (p *Planner) getInstallerImage(cluster *rkev1.RKECluster) (string, error) {
@@ -441,7 +434,7 @@ func (p *Planner) getInstallerImage(cluster *rkev1.RKECluster) (string, error) {
 		return "docker.io/oats87/system-agent-installer-rke2:v1.19.8-alpha1-rke2r2", nil
 	}
 
-	runtime := GetRuntime(cluster)
+	runtime := GetRuntime(cluster.Spec.KubernetesVersion)
 	image, err := settings.Get(p.settings, "system-agent-installer-image")
 	if err != nil {
 		return "", err

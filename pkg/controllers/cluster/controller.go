@@ -230,8 +230,8 @@ func (h *handler) updateStatus(objs []runtime.Object, cluster *v1.Cluster, statu
 		}
 		if secret != nil {
 			objs = append(objs, secret)
+			status.ClientSecretName = secret.Name
 		}
-		status.ClientSecretName = secret.Name
 	}
 
 	return objs, status, nil

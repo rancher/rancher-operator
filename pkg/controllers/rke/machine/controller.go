@@ -6,12 +6,17 @@ import (
 	"encoding/base64"
 	"fmt"
 
+	"github.com/rancher/lasso/pkg/dynamic"
+	v1 "github.com/rancher/rancher-operator/pkg/apis/rancher.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/clients"
 	capicontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/cluster.x-k8s.io/v1alpha4"
 	mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
+	ranchercontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/rancher.cattle.io/v1"
 	rkecontroller "github.com/rancher/rancher-operator/pkg/generated/controllers/rke.cattle.io/v1"
+	"github.com/rancher/rancher-operator/pkg/kubeconfig"
 	"github.com/rancher/rancher-operator/pkg/planner"
+	"github.com/rancher/rancher-operator/pkg/util"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/name"
 	"github.com/rancher/wrangler/pkg/relatedresource"
@@ -19,8 +24,11 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha4"
 )
 
@@ -39,22 +47,28 @@ var (
 type handler struct {
 	serviceAccountCache corecontrollers.ServiceAccountCache
 	secretCache         corecontrollers.SecretCache
-	clusterCache        capicontrollers.ClusterCache
+	capiClusterCache    capicontrollers.ClusterCache
+	rancherClusterCache ranchercontrollers.ClusterCache
 	machines            capicontrollers.MachineClient
 	settingsCache       mgmtcontrollers.SettingCache
 	rkeBootstrapCache   rkecontroller.RKEBootstrapCache
 	rkeBootstrap        rkecontroller.RKEBootstrapClient
+	kubeconfigManager   *kubeconfig.Manager
+	dynamic             *dynamic.Controller
 }
 
 func Register(ctx context.Context, clients *clients.Clients) {
 	h := &handler{
 		serviceAccountCache: clients.Core.ServiceAccount().Cache(),
 		secretCache:         clients.Core.Secret().Cache(),
-		clusterCache:        clients.CAPI.Cluster().Cache(),
+		capiClusterCache:    clients.CAPI.Cluster().Cache(),
+		rancherClusterCache: clients.Cluster.Cluster().Cache(),
 		machines:            clients.CAPI.Machine(),
 		settingsCache:       clients.Management.Setting().Cache(),
 		rkeBootstrapCache:   clients.RKE.RKEBootstrap().Cache(),
 		rkeBootstrap:        clients.RKE.RKEBootstrap(),
+		kubeconfigManager:   kubeconfig.New(clients),
+		dynamic:             clients.Dynamic,
 	}
 	capicontrollers.RegisterMachineGeneratingHandler(ctx,
 		clients.CAPI.Machine(),
@@ -84,6 +98,8 @@ func Register(ctx context.Context, clients *clients.Clients) {
 		}
 		return nil, nil
 	}, clients.CAPI.Machine(), clients.Core.ServiceAccount())
+
+	clients.CAPI.Machine().OnChange(ctx, "machine-provider-sync", h.associateMachineWithNode)
 }
 
 func IsRKECluster(spec *capi.ClusterSpec) bool {
@@ -249,7 +265,7 @@ func (h *handler) OnChange(obj *capi.Machine, status capi.MachineStatus) ([]runt
 		result []runtime.Object
 	)
 
-	cluster, err := h.clusterCache.Get(obj.Namespace, obj.Spec.ClusterName)
+	cluster, err := h.capiClusterCache.Get(obj.Namespace, obj.Spec.ClusterName)
 	if err != nil {
 		return nil, status, err
 	}
@@ -276,4 +292,128 @@ func (h *handler) OnChange(obj *capi.Machine, status capi.MachineStatus) ([]runt
 
 	result = append(result, objs...)
 	return result, status, nil
+}
+
+func (h *handler) associateMachineWithNode(_ string, machine *capi.Machine) (*capi.Machine, error) {
+	if machine == nil || machine.DeletionTimestamp != nil {
+		return machine, nil
+	}
+
+	if machine.Spec.ProviderID != nil && *machine.Spec.ProviderID != "" {
+		// If the machine already has its provider ID set, then we do not need to continue
+		return machine, nil
+	}
+
+	rancherCluster, err := h.getAssociatedClusters(machine)
+	if err != nil {
+		return machine, err
+	}
+
+	secret, err := h.kubeconfigManager.GetKubeConfig(rancherCluster, rancherCluster.Status)
+	if err != nil {
+		return machine, err
+	}
+
+	config, err := clientcmd.RESTConfigFromKubeConfig(secret.Data["value"])
+	if err != nil {
+		return machine, err
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return machine, err
+	}
+
+	nodes, err := clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "rke.cattle.io/machine"})
+	if err != nil {
+		return machine, err
+	}
+
+	for _, node := range nodes.Items {
+		if node.Labels["rke.cattle.io/machine"] != string(machine.GetUID()) {
+			continue
+		}
+		return machine, h.updateMachine(&node, machine, rancherCluster)
+	}
+
+	return machine, fmt.Errorf("no node found for machine %v", machine.Name)
+}
+
+func (h *handler) updateMachineJoinURL(node *corev1.Node, machine *capi.Machine, rancherCluster *v1.Cluster) error {
+	address := ""
+	for _, nodeAddress := range node.Status.Addresses {
+		switch nodeAddress.Type {
+		case corev1.NodeInternalIP:
+			address = nodeAddress.Address
+		case corev1.NodeExternalIP:
+			if address == "" {
+				address = nodeAddress.Address
+			}
+		}
+	}
+
+	url := fmt.Sprintf("https://%s:%d", address, getJoinURLPort(rancherCluster))
+	if machine.Annotations[planner.JoinURLAnnotation] == url {
+		return nil
+	}
+
+	machine = machine.DeepCopy()
+	if machine.Annotations == nil {
+		machine.Annotations = map[string]string{}
+	}
+
+	machine.Annotations[planner.JoinURLAnnotation] = url
+	machine.Annotations["rke.cattle.io/node-ip-address"] = address
+	_, err := h.machines.Update(machine)
+	return err
+}
+
+func (h *handler) updateMachine(node *corev1.Node, machine *capi.Machine, rancherCluster *v1.Cluster) error {
+	if err := h.updateMachineJoinURL(node, machine, rancherCluster); err != nil {
+		return err
+	}
+
+	gvk := schema.FromAPIVersionAndKind(machine.Spec.InfrastructureRef.APIVersion, machine.Spec.InfrastructureRef.Kind)
+	infra, err := h.dynamic.Get(gvk, machine.Namespace, machine.Spec.InfrastructureRef.Name)
+	if apierror.IsNotFound(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	data, err := util.ToMap(infra)
+	if err != nil {
+		return err
+	}
+
+	if data.String("spec", "providerID") != node.Spec.ProviderID {
+		data, err := util.ToMap(infra.DeepCopyObject())
+		if err != nil {
+			return err
+		}
+
+		data.SetNested(node.Spec.ProviderID, "spec", "providerID")
+		_, err = h.dynamic.Update(&unstructured.Unstructured{
+			Object: data,
+		})
+		return err
+	}
+
+	return nil
+}
+
+func (h *handler) getAssociatedClusters(machine *capi.Machine) (*v1.Cluster, error) {
+	rancherCluster, err := h.rancherClusterCache.Get(machine.Namespace, machine.Spec.ClusterName)
+	if err != nil {
+		return nil, err
+	}
+
+	return rancherCluster, err
+}
+
+func getJoinURLPort(cluster *v1.Cluster) int {
+	if planner.GetRuntime(cluster.Spec.KubernetesVersion) == planner.RuntimeRKE2 {
+		return 9345
+	}
+	return 6443
 }

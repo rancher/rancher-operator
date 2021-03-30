@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 
 	"github.com/rancher/norman/types/convert"
 	v1 "github.com/rancher/rancher-operator/pkg/apis/rancher.cattle.io/v1"
@@ -10,6 +11,7 @@ import (
 	rocontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/rancher.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/kubeconfig"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/wrangler/pkg/apply"
 	"github.com/rancher/wrangler/pkg/condition"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/generic"
@@ -38,6 +40,7 @@ type handler struct {
 	secretCache       corecontrollers.SecretCache
 	settings          mgmtcontrollers.SettingCache
 	kubeconfigManager *kubeconfig.Manager
+	apply             apply.Apply
 }
 
 func Register(
@@ -53,12 +56,16 @@ func Register(
 		clusterCache:      clients.Cluster.Cluster().Cache(),
 		secretCache:       clients.Core.Secret().Cache(),
 		kubeconfigManager: kubeconfig.New(clients),
+		apply: clients.Apply.WithCacheTypes(
+			clients.Cluster.Cluster(),
+			clients.Management.Cluster()),
 	}
 
 	clients.Cluster.Cluster().OnChange(ctx, "cluster-label", h.addLabel)
 	rocontrollers.RegisterClusterGeneratingHandler(ctx,
 		clients.Cluster.Cluster(),
 		clients.Apply.WithCacheTypes(clients.Management.Cluster(),
+			clients.Management.ClusterRoleTemplateBinding(),
 			clients.Management.ClusterRegistrationToken(),
 			clients.Core.Namespace(),
 			clients.Core.Secret()),
@@ -89,7 +96,7 @@ func (h *handler) addLabel(_ string, cluster *v1.Cluster) (*v1.Cluster, error) {
 	if cluster == nil {
 		return nil, nil
 	}
-	if cluster.Labels["cluster-name"] == cluster.Name {
+	if cluster.Labels["metadata.name"] == cluster.Name {
 		return cluster, nil
 	}
 
@@ -97,7 +104,7 @@ func (h *handler) addLabel(_ string, cluster *v1.Cluster) (*v1.Cluster, error) {
 	if cluster.Labels == nil {
 		cluster.Labels = map[string]string{}
 	}
-	cluster.Labels["cluster-name"] = cluster.Name
+	cluster.Labels["metadata.name"] = cluster.Name
 	return h.clusters.Update(cluster)
 }
 
@@ -120,6 +127,16 @@ func (h *handler) clusterWatch(namespace, name string, obj runtime.Object) ([]re
 }
 
 func (h *handler) generateCluster(cluster *v1.Cluster, status v1.ClusterStatus) ([]runtime.Object, v1.ClusterStatus, error) {
+	if cluster.Spec.ReferencedConfig != nil {
+		return h.referenceCluster(cluster, status)
+	}
+
+	if owningCluster, err := h.apply.FindOwner(cluster); errors.Is(err, apply.ErrOwnerNotFound) || errors.Is(err, apply.ErrNoInformerFound) {
+	} else if _, ok := owningCluster.(*v3.Cluster); err == nil && ok {
+		// Do not generate v3.Cluster if this cluster was generated from a v3.Cluster
+		return nil, status, nil
+	}
+
 	switch {
 	case cluster.Spec.ClusterAPIConfig != nil:
 		return h.createClusterAndDeployAgent(cluster, status)
@@ -229,6 +246,12 @@ func (h *handler) updateStatus(objs []runtime.Object, cluster *v1.Cluster, statu
 		if secret != nil {
 			objs = append(objs, secret)
 			status.ClientSecretName = secret.Name
+
+			ctrb, err := h.kubeconfigManager.GetCTRBForAdmin(cluster, status)
+			if err != nil {
+				return nil, status, err
+			}
+			objs = append(objs, ctrb)
 		}
 	}
 

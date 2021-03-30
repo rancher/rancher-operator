@@ -22,10 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
-var (
-	clusterName = "fleet.cattle.io/cluster-name"
-)
-
 type handler struct {
 	settings mgmtcontrollers.SettingCache
 	clusters mgmtcontrollers.ClusterClient
@@ -51,20 +47,23 @@ func Register(ctx context.Context, clients *clients.Clients) {
 		nil,
 	)
 
-	relatedresource.WatchClusterScoped(ctx, "fleet-cluster-resolver", func(namespace, name string, obj runtime.Object) ([]relatedresource.Key, error) {
-		owner, err := h.apply.FindOwner(obj)
-		if err != nil {
-			// ignore error
-			return nil, nil
-		}
-		if c, ok := owner.(*v1.Cluster); ok {
-			return []relatedresource.Key{{
-				Namespace: c.Namespace,
-				Name:      c.Name,
-			}}, nil
-		}
+	relatedresource.WatchClusterScoped(ctx, "fleet-cluster-resolver", h.clusterToCluster,
+		clients.Management.Cluster(), clients.Cluster.Cluster())
+}
+
+func (h *handler) clusterToCluster(namespace, name string, obj runtime.Object) ([]relatedresource.Key, error) {
+	owner, err := h.apply.FindOwner(obj)
+	if err != nil {
+		// ignore error
 		return nil, nil
-	}, clients.Management.Cluster(), clients.Cluster.Cluster())
+	}
+	if c, ok := owner.(*v1.Cluster); ok {
+		return []relatedresource.Key{{
+			Namespace: c.Namespace,
+			Name:      c.Name,
+		}}, nil
+	}
+	return nil, nil
 }
 
 func (h *handler) addLabel(key string, cluster *mgmt.Cluster) (*mgmt.Cluster, error) {
@@ -110,43 +109,28 @@ func (h *handler) addLabel(key string, cluster *mgmt.Cluster) (*mgmt.Cluster, er
 		return cluster, nil
 	}
 
-	if cluster.Labels[clusterName] != cluster.Name {
-		newCluster := cluster.DeepCopy()
-		if newCluster.Labels == nil {
-			newCluster.Labels = map[string]string{}
-		}
-		newCluster.Labels[clusterName] = cluster.Name
-		patch, err := generatePatch(cluster, newCluster)
-		if err != nil {
-			return cluster, err
-		}
-
-		return h.clusters.Patch(cluster.Name, types.MergePatchType, patch)
-	}
-
 	return cluster, nil
 }
 
-func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus) ([]runtime.Object, mgmt.ClusterStatus, error) {
-	if cluster.Spec.FleetWorkspaceName == "" ||
-		cluster.Labels[clusterName] == "" ||
-		cluster.Spec.Internal {
+func (h *handler) createCluster(mgmtCluster *mgmt.Cluster, status mgmt.ClusterStatus) ([]runtime.Object, mgmt.ClusterStatus, error) {
+	if mgmtCluster.Spec.FleetWorkspaceName == "" ||
+		mgmtCluster.Spec.Internal {
 		return nil, status, nil
 	}
 
-	if !mgmt.ClusterConditionReady.IsTrue(cluster) {
+	if !mgmt.ClusterConditionReady.IsTrue(mgmtCluster) {
 		return nil, status, generic.ErrSkip
 	}
 
 	var (
-		secretName       = cluster.Name + "-kubeconfig"
-		fleetClusterName = cluster.Name
-		rClusterName     = cluster.Name
+		secretName       = mgmtCluster.Name + "-kubeconfig"
+		fleetClusterName = mgmtCluster.Name
+		rClusterName     = mgmtCluster.Name
 		createCluster    = true
 		objs             []runtime.Object
 	)
 
-	if owningCluster, err := h.apply.FindOwner(cluster); errors.Is(err, apply.ErrOwnerNotFound) || errors.Is(err, apply.ErrNoInformerFound) {
+	if owningCluster, err := h.apply.FindOwner(mgmtCluster); errors.Is(err, apply.ErrOwnerNotFound) || errors.Is(err, apply.ErrNoInformerFound) {
 	} else if err != nil {
 		return nil, status, err
 	} else if rCluster, ok := owningCluster.(*v1.Cluster); ok {
@@ -159,23 +143,23 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 		secretName = rCluster.Status.ClientSecretName
 	}
 
-	labels := yaml.CleanAnnotationsForExport(cluster.Labels)
-	labels["management.cattle.io/cluster-name"] = cluster.Name
-	labels["cluster-name"] = rClusterName
-	if errs := validation.IsValidLabelValue(cluster.Spec.DisplayName); len(errs) == 0 {
-		labels["management.cattle.io/cluster-display-name"] = cluster.Spec.DisplayName
+	labels := yaml.CleanAnnotationsForExport(mgmtCluster.Labels)
+	labels["management.cattle.io/cluster-name"] = mgmtCluster.Name
+	labels["metadata.name"] = rClusterName
+	if errs := validation.IsValidLabelValue(mgmtCluster.Spec.DisplayName); len(errs) == 0 {
+		labels["management.cattle.io/cluster-display-name"] = mgmtCluster.Spec.DisplayName
 	}
 
 	if createCluster {
 		objs = append(objs, &v1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      rClusterName,
-				Namespace: cluster.Spec.FleetWorkspaceName,
+				Namespace: mgmtCluster.Spec.FleetWorkspaceName,
 				Labels:    labels,
 			},
 			Spec: v1.ClusterSpec{
 				ReferencedConfig: &v1.ReferencedConfig{
-					ManagementClusterName: cluster.Name,
+					ManagementClusterName: mgmtCluster.Name,
 				},
 			},
 		})
@@ -184,7 +168,7 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 	objs = append(objs, &fleet.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fleetClusterName,
-			Namespace: cluster.Spec.FleetWorkspaceName,
+			Namespace: mgmtCluster.Spec.FleetWorkspaceName,
 			Labels:    labels,
 		},
 		Spec: fleet.ClusterSpec{

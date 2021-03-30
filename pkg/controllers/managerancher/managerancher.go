@@ -81,7 +81,7 @@ func (h *handler) values(cluster *rancherv1.Cluster) (map[string]interface{}, er
 		"ingress": map[string]interface{}{
 			"enabled": false,
 		},
-		"replicas": "auto",
+		"replicas": -1,
 		"tls":      "external",
 	}, cluster.Spec.RancherValues.Data)), nil
 }
@@ -157,7 +157,7 @@ func (h *handler) OnChange(cluster *rancherv1.Cluster, status rancherv1.ClusterS
 					ClusterSelector: &metav1.LabelSelector{
 						MatchExpressions: []metav1.LabelSelectorRequirement{
 							{
-								Key:      "cluster-name",
+								Key:      "metadata.name",
 								Operator: metav1.LabelSelectorOpIn,
 								Values: []string{
 									cluster.Name,

@@ -15,6 +15,7 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	appcontroller "github.com/rancher/wrangler/pkg/generated/controllers/apps/v1"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	"github.com/rancher/wrangler/pkg/name"
 	"github.com/rancher/wrangler/pkg/randomtoken"
 	corev1 "k8s.io/api/core/v1"
 	apierror "k8s.io/apimachinery/pkg/api/errors"
@@ -197,6 +198,24 @@ func createSHA256Hash(secretKey string) (string, error) {
 	encSalt := base64.RawStdEncoding.EncodeToString(salt)
 	encKey := base64.RawStdEncoding.EncodeToString(hash[:])
 	return fmt.Sprintf(hashFormat, Version, encSalt, encKey), nil
+}
+
+func (m *Manager) GetCTRBForAdmin(cluster *v1.Cluster, status v1.ClusterStatus) (*v3.ClusterRoleTemplateBinding, error) {
+	if status.ClusterName == "" {
+		return nil, fmt.Errorf("management cluster is not assigned to v1.Cluster")
+	}
+	principalID := getPrincipalID(cluster.Namespace, cluster.Name)
+	userName := getUserNameForPrincipal(principalID)
+	return &v3.ClusterRoleTemplateBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name.SafeConcatName(status.ClusterName, "owner"),
+			Namespace: status.ClusterName,
+		},
+		ClusterName:       status.ClusterName,
+		UserName:          userName,
+		UserPrincipalName: principalID,
+		RoleTemplateName:  "cluster-owner",
+	}, nil
 }
 
 func (m *Manager) GetKubeConfig(cluster *v1.Cluster, status v1.ClusterStatus) (*corev1.Secret, error) {

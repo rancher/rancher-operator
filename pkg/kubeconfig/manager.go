@@ -205,8 +205,8 @@ func (m *Manager) GetKubeConfig(cluster *v1.Cluster, status v1.ClusterStatus) (*
 		tokenValue string
 	)
 
-	if cluster.Spec.ImportedConfig != nil && cluster.Spec.ImportedConfig.KubeConfigSecretName == name {
-		return nil, nil
+	if cluster.Spec.ClusterAPIConfig != nil {
+		name = GetKubeConfigSecretName(cluster.Spec.ClusterAPIConfig.ClusterName)
 	}
 
 	tokenValue, err := m.GetToken(cluster.Namespace, cluster.Name)

@@ -21,7 +21,6 @@ type ClusterSpec struct {
 	KubernetesVersion         string `json:"kubernetesVersion,omitempty"`
 
 	ClusterAPIConfig *ClusterAPIConfig `json:"clusterAPIConfig,omitempty"`
-	ImportedConfig   *ImportedConfig   `json:"importedConfig,omitempty"`
 	RKEConfig        *RKEConfig        `json:"rkeConfig,omitempty"`
 	ReferencedConfig *ReferencedConfig `json:"referencedConfig,omitempty"`
 	RancherValues    v1.GenericMap     `json:"rancherValues,omitempty" wrangler:"nullable"`

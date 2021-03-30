@@ -33,13 +33,6 @@ spec:
                   nullable: true
                   type: string
               type: object
-            importedConfig:
-              nullable: true
-              properties:
-                kubeConfigSecretName:
-                  nullable: true
-                  type: string
-              type: object
             kubernetesVersion:
               nullable: true
               type: string

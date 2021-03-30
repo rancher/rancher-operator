@@ -20,16 +20,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func (h *handler) capiCluster(cluster *v1.Cluster, status v1.ClusterStatus) ([]runtime.Object, v1.ClusterStatus, error) {
-	cluster = cluster.DeepCopy()
-	cluster.Spec.ImportedConfig = &v1.ImportedConfig{
-		KubeConfigSecretName: fmt.Sprintf("%s-kubeconfig", cluster.Spec.ClusterAPIConfig.ClusterName),
-	}
-	cluster.Spec.ClusterAPIConfig = nil
-	return h.importCluster(cluster, status)
-}
-
-func (h *handler) importCluster(cluster *v1.Cluster, status v1.ClusterStatus) ([]runtime.Object, v1.ClusterStatus, error) {
+func (h *handler) createClusterAndDeployAgent(cluster *v1.Cluster, status v1.ClusterStatus) ([]runtime.Object, v1.ClusterStatus, error) {
 	objs, status, err := h.createCluster(cluster, status, v3.ClusterSpec{
 		ImportedConfig: &v3.ImportedConfig{},
 	})
@@ -84,7 +75,8 @@ func (h *handler) deployAgent(cluster *v1.Cluster, status v1.ClusterStatus) (boo
 		return false, nil
 	}
 
-	return true, h.deploy(cluster, cluster.Namespace, cluster.Spec.ImportedConfig.KubeConfigSecretName, tokenValue)
+	secretName := fmt.Sprintf("%s-kubeconfig", cluster.Spec.ClusterAPIConfig.ClusterName)
+	return true, h.deploy(cluster, cluster.Namespace, secretName, tokenValue)
 }
 
 func (h *handler) deploy(cluster *v1.Cluster, secretNamespace, secretName string, token string) error {

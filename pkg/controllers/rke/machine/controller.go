@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"time"
 
 	"github.com/rancher/lasso/pkg/dynamic"
 	v1 "github.com/rancher/rancher-operator/pkg/apis/rancher.cattle.io/v1"
@@ -20,11 +21,13 @@ import (
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/name"
 	"github.com/rancher/wrangler/pkg/relatedresource"
+
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
@@ -38,6 +41,8 @@ const (
 	planSecret       = "rke.cattle.io/plan-secret-name"
 	roleBootstrap    = "bootstrap"
 	rolePlan         = "plan"
+
+	nodeErrorEnqueueTime = 15 * time.Second
 )
 
 var (
@@ -49,7 +54,7 @@ type handler struct {
 	secretCache         corecontrollers.SecretCache
 	capiClusterCache    capicontrollers.ClusterCache
 	rancherClusterCache ranchercontrollers.ClusterCache
-	machines            capicontrollers.MachineClient
+	machines            capicontrollers.MachineController
 	settingsCache       mgmtcontrollers.SettingCache
 	rkeBootstrapCache   rkecontroller.RKEBootstrapCache
 	rkeBootstrap        rkecontroller.RKEBootstrapClient
@@ -304,7 +309,13 @@ func (h *handler) associateMachineWithNode(_ string, machine *capi.Machine) (*ca
 		return machine, nil
 	}
 
-	rancherCluster, err := h.getAssociatedClusters(machine)
+	if capiCluster, err := h.capiClusterCache.Get(machine.Namespace, machine.Spec.ClusterName); err != nil {
+		return machine, err
+	} else if !IsRKECluster(&capiCluster.Spec) {
+		return machine, nil
+	}
+
+	rancherCluster, err := h.rancherClusterCache.Get(machine.Namespace, machine.Spec.ClusterName)
 	if err != nil {
 		return machine, err
 	}
@@ -324,19 +335,14 @@ func (h *handler) associateMachineWithNode(_ string, machine *capi.Machine) (*ca
 		return machine, err
 	}
 
-	nodes, err := clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "rke.cattle.io/machine"})
-	if err != nil {
-		return machine, err
+	nodeLabelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"rke.cattle.io/machine": string(machine.GetUID())}}
+	nodes, err := clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: labels.Set(nodeLabelSelector.MatchLabels).String()})
+	if err != nil || len(nodes.Items) == 0 {
+		h.machines.EnqueueAfter(machine.Namespace, machine.Name, nodeErrorEnqueueTime)
+		return machine, nil
 	}
 
-	for _, node := range nodes.Items {
-		if node.Labels["rke.cattle.io/machine"] != string(machine.GetUID()) {
-			continue
-		}
-		return machine, h.updateMachine(&node, machine, rancherCluster)
-	}
-
-	return machine, fmt.Errorf("no node found for machine %v", machine.Name)
+	return machine, h.updateMachine(&nodes.Items[0], machine, rancherCluster)
 }
 
 func (h *handler) updateMachineJoinURL(node *corev1.Node, machine *capi.Machine, rancherCluster *v1.Cluster) error {
@@ -400,15 +406,6 @@ func (h *handler) updateMachine(node *corev1.Node, machine *capi.Machine, ranche
 	}
 
 	return nil
-}
-
-func (h *handler) getAssociatedClusters(machine *capi.Machine) (*v1.Cluster, error) {
-	rancherCluster, err := h.rancherClusterCache.Get(machine.Namespace, machine.Spec.ClusterName)
-	if err != nil {
-		return nil, err
-	}
-
-	return rancherCluster, err
 }
 
 func getJoinURLPort(cluster *v1.Cluster) int {

@@ -14,7 +14,7 @@ require (
 	github.com/rancher/fleet/pkg/apis v0.0.0-20210225010648-40ee92df4aea
 	github.com/rancher/lasso v0.0.0-20210407025055-18a00567c734
 	github.com/rancher/lasso/controller-runtime v0.0.0-20210219163000-fcdfcec12969
-	github.com/rancher/norman v0.0.0-20210219183327-731b8482505c
+	github.com/rancher/norman v0.0.0-20210225010917-c7fd1e24145b
 	github.com/rancher/rancher/pkg/apis v0.0.0-20210222182625-a85f4d1f87fe
 	github.com/rancher/rancher/pkg/client v0.0.0-20210222182625-a85f4d1f87fe
 	github.com/rancher/steve v0.0.0-20210318171316-376934558c5b

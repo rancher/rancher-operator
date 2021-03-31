@@ -560,8 +560,9 @@ github.com/rancher/lasso/controller-runtime v0.0.0-20210219163000-fcdfcec12969/g
 github.com/rancher/norman v0.0.0-20200517050325-f53cae161640/go.mod h1:92rz/7QN7DOeLQZlJY/8aFBOmF085igIVguR0wpxLas=
 github.com/rancher/norman v0.0.0-20200714195611-b3163ad4ebc4/go.mod h1:W9LfZ96OfjkWSGTy2DUqYPt47Jpzrs7eM0i3AAx6fOI=
 github.com/rancher/norman v0.0.0-20200820172041-261460ee9088/go.mod h1:W9LfZ96OfjkWSGTy2DUqYPt47Jpzrs7eM0i3AAx6fOI=
-github.com/rancher/norman v0.0.0-20210219183327-731b8482505c h1:1HKsD6uKTmVcQVuwP8PsZBeNwmVI7V+Zr0pSyxzjLTE=
 github.com/rancher/norman v0.0.0-20210219183327-731b8482505c/go.mod h1:hhnf77V2lmZD7cvUqi4vTBpIs3KpHNL/AmuN0MqEClI=
+github.com/rancher/norman v0.0.0-20210225010917-c7fd1e24145b h1:4SV/mEqaGmwvAV5XIO+hRqacZR1KyW6sTqzFNIlyTAY=
+github.com/rancher/norman v0.0.0-20210225010917-c7fd1e24145b/go.mod h1:hhnf77V2lmZD7cvUqi4vTBpIs3KpHNL/AmuN0MqEClI=
 github.com/rancher/rancher/pkg/apis v0.0.0-20210222182625-a85f4d1f87fe h1:bab3kXhWkr949jOuWJpWUAOSOFhELyO0Qpk2ZvS0JVU=
 github.com/rancher/rancher/pkg/apis v0.0.0-20210222182625-a85f4d1f87fe/go.mod h1:MRfZhFmR9wcOAYtxlPF7xpUfMkNy2MeDMUFujOy40iA=
 github.com/rancher/rancher/pkg/client v0.0.0-20210222182625-a85f4d1f87fe h1:BzezMIAdELkOeFdqdz22YGo52rab05k6UCrPWHZ22is=

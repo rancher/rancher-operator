@@ -39,6 +39,7 @@ const (
 	WorkerRoleLabel       = "rke.cattle.io/worker-role"
 	ControlPlaneRoleLabel = "rke.cattle.io/control-plane-role"
 	MachineUIDLabel       = "rke.cattle.io/machine"
+	capiMachineLabel      = "cluster.x-k8s.io/cluster-name"
 
 	MachineNameLabel      = "rke.cattle.io/machine-name"
 	MachineNamespaceLabel = "rke.cattle.io/machine-namespace"
@@ -50,10 +51,30 @@ const (
 	RuntimeRKE2 = "rke2"
 
 	SecretTypeMachinePlan = "rke.cattle.io/machine-plan"
+
+	authnWebhookFileName = "/var/lib/rancher/%s/kube-api-authn-webhook.yaml"
 )
 
 var (
-	capiMachineLabel = "cluster.x-k8s.io/cluster-name"
+	AuthnWebhook = []byte(`
+apiVersion: v1
+kind: Config
+clusters:
+- name: Default
+  cluster:
+    insecure-skip-tls-verify: true
+    server: http://127.0.0.1:6440/v1/authenticate
+users:
+- name: Default
+  user:
+    insecure-skip-tls-verify: true
+current-context: webhook
+contexts:
+- name: webhook
+  context:
+    user: Default
+    cluster: Default
+`)
 )
 
 type ErrWaiting string
@@ -364,10 +385,19 @@ func (p *Planner) desiredPlan(controlPlane *rkev1.RKEControlPlane, secret plan.S
 		if err != nil {
 			return result, err
 		}
-		result.Files = append(result.Files, plan.File{
-			Content: base64.StdEncoding.EncodeToString(data),
-			Path:    fmt.Sprintf("/var/lib/rancher/%s/server/manifests/cluster-agent.yaml", runtime),
-		})
+
+		authFile := fmt.Sprintf(authnWebhookFileName, GetRuntime(controlPlane.Spec.KubernetesVersion))
+		result.Files = append(result.Files, []plan.File{
+			{
+				Content: base64.StdEncoding.EncodeToString(data),
+				Path:    fmt.Sprintf("/var/lib/rancher/%s/server/manifests/cluster-agent.yaml", GetRuntime(controlPlane.Spec.KubernetesVersion)),
+			},
+			{
+				Content: base64.StdEncoding.EncodeToString(AuthnWebhook),
+				Path:    authFile,
+			},
+		}...)
+		config["kube-apiserver-arg"] = fmt.Sprintf("authentication-token-webhook-config-file=%s", authFile)
 	}
 
 	image, err := p.getInstallerImage(controlPlane)

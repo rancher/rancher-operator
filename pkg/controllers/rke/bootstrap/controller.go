@@ -317,7 +317,7 @@ func (h *handler) associateMachineWithNode(_ string, bootstrap *rkev1.RKEBootstr
 
 	nodeLabelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"rke.cattle.io/machine": string(machine.GetUID())}}
 	nodes, err := clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: labels.Set(nodeLabelSelector.MatchLabels).String()})
-	if err != nil || len(nodes.Items) == 0 {
+	if err != nil || len(nodes.Items) == 0 || nodes.Items[0].Spec.ProviderID == "" {
 		h.machines.EnqueueAfter(machine.Namespace, machine.Name, nodeErrorEnqueueTime)
 		return bootstrap, nil
 	}
@@ -349,7 +349,6 @@ func (h *handler) updateMachineJoinURL(node *corev1.Node, machine *capi.Machine,
 	}
 
 	machine.Annotations[planner.JoinURLAnnotation] = url
-	machine.Annotations["rke.cattle.io/node-ip-address"] = address
 	_, err := h.machines.Update(machine)
 	return err
 }

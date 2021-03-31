@@ -36,6 +36,17 @@ spec:
             kubernetesVersion:
               nullable: true
               type: string
+            localClusterAuthEndpoint:
+              properties:
+                caCerts:
+                  nullable: true
+                  type: string
+                enabled:
+                  type: boolean
+                fqdn:
+                  nullable: true
+                  type: string
+              type: object
             rancherValues:
               nullable: true
               type: object

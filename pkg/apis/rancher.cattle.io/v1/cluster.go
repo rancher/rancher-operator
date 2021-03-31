@@ -2,6 +2,7 @@ package v1
 
 import (
 	v1 "github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1"
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -20,10 +21,11 @@ type ClusterSpec struct {
 	CloudCredentialSecretName string `json:"cloudCredentialSecretName,omitempty"`
 	KubernetesVersion         string `json:"kubernetesVersion,omitempty"`
 
-	ClusterAPIConfig *ClusterAPIConfig `json:"clusterAPIConfig,omitempty"`
-	RKEConfig        *RKEConfig        `json:"rkeConfig,omitempty"`
-	ReferencedConfig *ReferencedConfig `json:"referencedConfig,omitempty"`
-	RancherValues    v1.GenericMap     `json:"rancherValues,omitempty" wrangler:"nullable"`
+	ClusterAPIConfig         *ClusterAPIConfig           `json:"clusterAPIConfig,omitempty"`
+	RKEConfig                *RKEConfig                  `json:"rkeConfig,omitempty"`
+	ReferencedConfig         *ReferencedConfig           `json:"referencedConfig,omitempty"`
+	RancherValues            v1.GenericMap               `json:"rancherValues,omitempty" wrangler:"nullable"`
+	LocalClusterAuthEndpoint v3.LocalClusterAuthEndpoint `json:"localClusterAuthEndpoint,omitempty"`
 }
 
 type ClusterStatus struct {

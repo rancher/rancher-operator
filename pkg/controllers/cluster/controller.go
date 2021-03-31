@@ -145,6 +145,9 @@ func (h *handler) generateCluster(cluster *v1.Cluster, status v1.ClusterStatus) 
 		return h.createClusterAndDeployAgent(cluster, status)
 	default:
 		return h.createCluster(cluster, status, v3.ClusterSpec{
+			ClusterSpecBase: v3.ClusterSpecBase{
+				LocalClusterAuthEndpoint: cluster.Spec.LocalClusterAuthEndpoint,
+			},
 			ImportedConfig: &v3.ImportedConfig{},
 		})
 	}

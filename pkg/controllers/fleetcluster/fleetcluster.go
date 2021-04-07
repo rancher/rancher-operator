@@ -187,6 +187,7 @@ func (h *handler) createCluster(cluster *mgmt.Cluster, status mgmt.ClusterStatus
 		},
 		Spec: fleet.ClusterSpec{
 			KubeConfigSecret: secretName,
+			AgentEnvVars:     cluster.Spec.AgentEnvVars,
 		},
 	})
 

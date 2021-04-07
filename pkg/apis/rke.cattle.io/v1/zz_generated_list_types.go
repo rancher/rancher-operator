@@ -77,16 +77,16 @@ func NewRKECluster(namespace, name string, obj RKECluster) *RKECluster {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// RKEControlPlanList is a list of RKEControlPlan resources
-type RKEControlPlanList struct {
+// RKEControlPlaneList is a list of RKEControlPlane resources
+type RKEControlPlaneList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
 
-	Items []RKEControlPlan `json:"items"`
+	Items []RKEControlPlane `json:"items"`
 }
 
-func NewRKEControlPlan(namespace, name string, obj RKEControlPlan) *RKEControlPlan {
-	obj.APIVersion, obj.Kind = SchemeGroupVersion.WithKind("RKEControlPlan").ToAPIVersionAndKind()
+func NewRKEControlPlane(namespace, name string, obj RKEControlPlane) *RKEControlPlane {
+	obj.APIVersion, obj.Kind = SchemeGroupVersion.WithKind("RKEControlPlane").ToAPIVersionAndKind()
 	obj.Name = name
 	obj.Namespace = namespace
 	return &obj

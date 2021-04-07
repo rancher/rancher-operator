@@ -3,13 +3,13 @@ package machineprovision
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/rancher/lasso/pkg/dynamic"
 	rkev1 "github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/clients"
 	capicontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/cluster.x-k8s.io/v1alpha4"
 	mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
-	rkecontroller "github.com/rancher/rancher-operator/pkg/generated/controllers/rke.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/util"
 	"github.com/rancher/wrangler/pkg/apply"
 	"github.com/rancher/wrangler/pkg/condition"
@@ -36,8 +36,6 @@ type handler struct {
 	pods            corecontrollers.PodCache
 	secrets         corecontrollers.SecretCache
 	machines        capicontrollers.MachineCache
-	clusters        capicontrollers.ClusterCache
-	rkeClusters     rkecontroller.RKEClusterCache
 	nodeDriverCache mgmtcontrollers.NodeDriverCache
 	dynamic         *dynamic.Controller
 }
@@ -46,7 +44,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 	h := &handler{
 		ctx: ctx,
 		apply: clients.Apply.
-			WithSetOwnerReference(false, false).
+			WithSetOwnerReference(true, true).
 			WithCacheTypes(clients.Core.Secret(),
 				clients.Core.ServiceAccount(),
 				clients.RBAC.RoleBinding(),
@@ -56,8 +54,6 @@ func Register(ctx context.Context, clients *clients.Clients) {
 		jobs:            clients.Batch.Job().Cache(),
 		secrets:         clients.Core.Secret().Cache(),
 		machines:        clients.CAPI.Machine().Cache(),
-		clusters:        clients.CAPI.Cluster().Cache(),
-		rkeClusters:     clients.RKE.RKECluster().Cache(),
 		nodeDriverCache: clients.Management.NodeDriver().Cache(),
 		dynamic:         clients.Dynamic,
 	}
@@ -241,6 +237,11 @@ func (h *handler) run(obj runtime.Object, create bool) (runtime.Object, error) {
 	args, err := h.getArgsEnvAndStatus(typeMeta, meta, data, create)
 	if err != nil {
 		return obj, err
+	}
+
+	if args.BootstrapSecretName == "" && !args.BootstrapOptional {
+		return obj,
+			h.dynamic.EnqueueAfter(obj.GetObjectKind().GroupVersionKind(), meta.GetNamespace(), meta.GetName(), 2*time.Second)
 	}
 
 	objs, err := h.objects(data.Bool("status", "ready") && create, typeMeta, meta, args)

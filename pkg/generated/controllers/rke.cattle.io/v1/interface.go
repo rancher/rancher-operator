@@ -33,7 +33,7 @@ type Interface interface {
 	RKEBootstrap() RKEBootstrapController
 	RKEBootstrapTemplate() RKEBootstrapTemplateController
 	RKECluster() RKEClusterController
-	RKEControlPlan() RKEControlPlanController
+	RKEControlPlane() RKEControlPlaneController
 	UnmanagedMachine() UnmanagedMachineController
 }
 
@@ -56,8 +56,8 @@ func (c *version) RKEBootstrapTemplate() RKEBootstrapTemplateController {
 func (c *version) RKECluster() RKEClusterController {
 	return NewRKEClusterController(schema.GroupVersionKind{Group: "rke.cattle.io", Version: "v1", Kind: "RKECluster"}, "rkeclusters", true, c.controllerFactory)
 }
-func (c *version) RKEControlPlan() RKEControlPlanController {
-	return NewRKEControlPlanController(schema.GroupVersionKind{Group: "rke.cattle.io", Version: "v1", Kind: "RKEControlPlan"}, "rkecontrolplans", true, c.controllerFactory)
+func (c *version) RKEControlPlane() RKEControlPlaneController {
+	return NewRKEControlPlaneController(schema.GroupVersionKind{Group: "rke.cattle.io", Version: "v1", Kind: "RKEControlPlane"}, "rkecontrolplanes", true, c.controllerFactory)
 }
 func (c *version) UnmanagedMachine() UnmanagedMachineController {
 	return NewUnmanagedMachineController(schema.GroupVersionKind{Group: "rke.cattle.io", Version: "v1", Kind: "UnmanagedMachine"}, "unmanagedmachines", true, c.controllerFactory)

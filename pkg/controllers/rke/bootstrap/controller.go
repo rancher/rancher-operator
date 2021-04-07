@@ -1,4 +1,4 @@
-package machine
+package bootstrap
 
 import (
 	"context"
@@ -37,8 +37,8 @@ import (
 
 const (
 	ClusterNameLabel = "rke.cattle.io/cluster-name"
-	roleLabel        = "rke.cattle.io/service-account-role"
 	planSecret       = "rke.cattle.io/plan-secret-name"
+	roleLabel        = "rke.cattle.io/service-account-role"
 	roleBootstrap    = "bootstrap"
 	rolePlan         = "plan"
 
@@ -52,8 +52,8 @@ var (
 type handler struct {
 	serviceAccountCache corecontrollers.ServiceAccountCache
 	secretCache         corecontrollers.SecretCache
-	capiClusterCache    capicontrollers.ClusterCache
 	rancherClusterCache ranchercontrollers.ClusterCache
+	machineCache        capicontrollers.MachineCache
 	machines            capicontrollers.MachineController
 	settingsCache       mgmtcontrollers.SettingCache
 	rkeBootstrapCache   rkecontroller.RKEBootstrapCache
@@ -66,17 +66,17 @@ func Register(ctx context.Context, clients *clients.Clients) {
 	h := &handler{
 		serviceAccountCache: clients.Core.ServiceAccount().Cache(),
 		secretCache:         clients.Core.Secret().Cache(),
-		capiClusterCache:    clients.CAPI.Cluster().Cache(),
 		rancherClusterCache: clients.Cluster.Cluster().Cache(),
 		machines:            clients.CAPI.Machine(),
+		machineCache:        clients.CAPI.Machine().Cache(),
 		settingsCache:       clients.Management.Setting().Cache(),
 		rkeBootstrapCache:   clients.RKE.RKEBootstrap().Cache(),
 		rkeBootstrap:        clients.RKE.RKEBootstrap(),
 		kubeconfigManager:   kubeconfig.New(clients),
 		dynamic:             clients.Dynamic,
 	}
-	capicontrollers.RegisterMachineGeneratingHandler(ctx,
-		clients.CAPI.Machine(),
+	rkecontroller.RegisterRKEBootstrapGeneratingHandler(ctx,
+		clients.RKE.RKEBootstrap(),
 		clients.Apply.
 			WithCacheTypes(
 				clients.RBAC.Role(),
@@ -84,7 +84,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 				clients.CAPI.Machine(),
 				clients.Core.ServiceAccount(),
 				clients.Core.Secret()).
-			WithSetOwnerReference(false, false),
+			WithSetOwnerReference(true, true),
 		"",
 		"rke-machine",
 		h.OnChange,
@@ -104,16 +104,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 		return nil, nil
 	}, clients.CAPI.Machine(), clients.Core.ServiceAccount())
 
-	clients.CAPI.Machine().OnChange(ctx, "machine-provider-sync", h.associateMachineWithNode)
-}
-
-func IsRKECluster(spec *capi.ClusterSpec) bool {
-	if spec.InfrastructureRef == nil {
-		return false
-	}
-	gvk := schema.FromAPIVersionAndKind(spec.InfrastructureRef.APIVersion, spec.InfrastructureRef.Kind)
-	return gvk.Group == rkev1.SchemeGroupVersion.Group &&
-		spec.InfrastructureRef.Kind == "RKECluster"
+	clients.RKE.RKEBootstrap().OnChange(ctx, "machine-provider-sync", h.associateMachineWithNode)
 }
 
 func (h *handler) getBootstrapSecret(namespace, name string) (*corev1.Secret, error) {
@@ -153,16 +144,15 @@ func (h *handler) getBootstrapSecret(namespace, name string) (*corev1.Secret, er
 	return nil, nil
 }
 
-func (h *handler) assignPlanSecret(obj *capi.Machine) ([]runtime.Object, error) {
-	secretName := planner.PlanSecretFromMachine(obj)
+func (h *handler) assignPlanSecret(machine *capi.Machine, obj *rkev1.RKEBootstrap) ([]runtime.Object, error) {
+	secretName := planner.PlanSecretFromBootstrapName(obj.Name)
 
 	sa := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: obj.Namespace,
 			Labels: map[string]string{
-				ClusterNameLabel:         obj.Spec.ClusterName,
-				planner.MachineNameLabel: obj.Name,
+				planner.MachineNameLabel: machine.Name,
 				roleLabel:                rolePlan,
 				planSecret:               secretName,
 			},
@@ -214,17 +204,24 @@ func (h *handler) assignPlanSecret(obj *capi.Machine) ([]runtime.Object, error) 
 	return []runtime.Object{sa, secret, role, rolebinding}, nil
 }
 
-func (h *handler) assignBootStrapSecret(obj *capi.Machine) (*corev1.Secret, []runtime.Object, error) {
-	if obj.Spec.Bootstrap.ConfigRef == nil ||
-		obj.Spec.Bootstrap.ConfigRef.APIVersion != bootstrapAPIVersion ||
-		obj.Spec.Bootstrap.ConfigRef.Kind != "RKEBootstrap" {
-		return nil, nil, nil
-	}
+func (h *handler) getMachine(obj *rkev1.RKEBootstrap) (*capi.Machine, error) {
+	for _, ref := range obj.OwnerReferences {
+		gvk := schema.FromAPIVersionAndKind(ref.APIVersion, ref.Kind)
+		if capi.GroupVersion.Group != gvk.Group ||
+			ref.Kind != "Machine" {
+			continue
+		}
 
-	if capi.MachinePhase(obj.Status.Phase) != capi.MachinePhasePending &&
-		capi.MachinePhase(obj.Status.Phase) != capi.MachinePhaseDeleting &&
-		capi.MachinePhase(obj.Status.Phase) != capi.MachinePhaseFailed &&
-		capi.MachinePhase(obj.Status.Phase) != capi.MachinePhaseProvisioning {
+		return h.machineCache.Get(obj.Namespace, ref.Name)
+	}
+	return nil, fmt.Errorf("not machine associated to RKEBootstrap %s/%s", obj.Namespace, obj.Name)
+}
+
+func (h *handler) assignBootStrapSecret(machine *capi.Machine, obj *rkev1.RKEBootstrap) (*corev1.Secret, []runtime.Object, error) {
+	if capi.MachinePhase(machine.Status.Phase) != capi.MachinePhasePending &&
+		capi.MachinePhase(machine.Status.Phase) != capi.MachinePhaseDeleting &&
+		capi.MachinePhase(machine.Status.Phase) != capi.MachinePhaseFailed &&
+		capi.MachinePhase(machine.Status.Phase) != capi.MachinePhaseProvisioning {
 		return nil, nil, nil
 	}
 
@@ -235,7 +232,7 @@ func (h *handler) assignBootStrapSecret(obj *capi.Machine) (*corev1.Secret, []ru
 			Name:      secretName,
 			Namespace: obj.Namespace,
 			Labels: map[string]string{
-				planner.MachineNameLabel: obj.Name,
+				planner.MachineNameLabel: machine.Name,
 				roleLabel:                roleBootstrap,
 			},
 		},
@@ -246,52 +243,36 @@ func (h *handler) assignBootStrapSecret(obj *capi.Machine) (*corev1.Secret, []ru
 		return nil, nil, err
 	}
 
-	if bootstrapSecret != nil {
-		rkeBootstrap, err := h.rkeBootstrapCache.Get(obj.Namespace, obj.Spec.Bootstrap.ConfigRef.Name)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if rkeBootstrap.Status.DataSecretName == nil || *rkeBootstrap.Status.DataSecretName != bootstrapSecret.Name {
-			rkeBootstrap = rkeBootstrap.DeepCopy()
-			rkeBootstrap.Status.DataSecretName = &bootstrapSecret.Name
-			rkeBootstrap.Status.Ready = true
-			if _, err := h.rkeBootstrap.UpdateStatus(rkeBootstrap); err != nil {
-				return nil, nil, err
-			}
-		}
-	}
-
 	return bootstrapSecret, []runtime.Object{sa}, nil
 }
 
-func (h *handler) OnChange(obj *capi.Machine, status capi.MachineStatus) ([]runtime.Object, capi.MachineStatus, error) {
+func (h *handler) OnChange(obj *rkev1.RKEBootstrap, status rkev1.RKEBootstrapStatus) ([]runtime.Object, rkev1.RKEBootstrapStatus, error) {
 	var (
 		result []runtime.Object
 	)
 
-	cluster, err := h.capiClusterCache.Get(obj.Namespace, obj.Spec.ClusterName)
+	machine, err := h.getMachine(obj)
 	if err != nil {
 		return nil, status, err
 	}
 
-	if !IsRKECluster(&cluster.Spec) {
-		return nil, status, nil
-	}
-
-	objs, err := h.assignPlanSecret(obj)
+	objs, err := h.assignPlanSecret(machine, obj)
 	if err != nil {
 		return nil, status, err
 	}
 
 	result = append(result, objs...)
 
-	bootstrapSecret, objs, err := h.assignBootStrapSecret(obj)
+	bootstrapSecret, objs, err := h.assignBootStrapSecret(machine, obj)
 	if err != nil {
 		return nil, status, err
 	}
 
 	if bootstrapSecret != nil {
+		if status.DataSecretName == nil {
+			status.DataSecretName = &bootstrapSecret.Name
+			status.Ready = true
+		}
 		result = append(result, bootstrapSecret)
 	}
 
@@ -299,50 +280,49 @@ func (h *handler) OnChange(obj *capi.Machine, status capi.MachineStatus) ([]runt
 	return result, status, nil
 }
 
-func (h *handler) associateMachineWithNode(_ string, machine *capi.Machine) (*capi.Machine, error) {
-	if machine == nil || machine.DeletionTimestamp != nil {
-		return machine, nil
+func (h *handler) associateMachineWithNode(_ string, bootstrap *rkev1.RKEBootstrap) (*rkev1.RKEBootstrap, error) {
+	if bootstrap == nil || bootstrap.DeletionTimestamp != nil {
+		return bootstrap, nil
+	}
+
+	machine, err := h.getMachine(bootstrap)
+	if err != nil {
+		return bootstrap, err
 	}
 
 	if machine.Spec.ProviderID != nil && *machine.Spec.ProviderID != "" {
 		// If the machine already has its provider ID set, then we do not need to continue
-		return machine, nil
-	}
-
-	if capiCluster, err := h.capiClusterCache.Get(machine.Namespace, machine.Spec.ClusterName); err != nil {
-		return machine, err
-	} else if !IsRKECluster(&capiCluster.Spec) {
-		return machine, nil
+		return bootstrap, nil
 	}
 
 	rancherCluster, err := h.rancherClusterCache.Get(machine.Namespace, machine.Spec.ClusterName)
 	if err != nil {
-		return machine, err
+		return bootstrap, err
 	}
 
 	secret, err := h.kubeconfigManager.GetKubeConfig(rancherCluster, rancherCluster.Status)
 	if err != nil {
-		return machine, err
+		return bootstrap, err
 	}
 
 	config, err := clientcmd.RESTConfigFromKubeConfig(secret.Data["value"])
 	if err != nil {
-		return machine, err
+		return bootstrap, err
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return machine, err
+		return bootstrap, err
 	}
 
 	nodeLabelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"rke.cattle.io/machine": string(machine.GetUID())}}
 	nodes, err := clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: labels.Set(nodeLabelSelector.MatchLabels).String()})
 	if err != nil || len(nodes.Items) == 0 {
 		h.machines.EnqueueAfter(machine.Namespace, machine.Name, nodeErrorEnqueueTime)
-		return machine, nil
+		return bootstrap, nil
 	}
 
-	return machine, h.updateMachine(&nodes.Items[0], machine, rancherCluster)
+	return bootstrap, h.updateMachine(&nodes.Items[0], machine, rancherCluster)
 }
 
 func (h *handler) updateMachineJoinURL(node *corev1.Node, machine *capi.Machine, rancherCluster *v1.Cluster) error {

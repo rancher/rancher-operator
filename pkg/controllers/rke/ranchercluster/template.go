@@ -1,4 +1,4 @@
-package cluster
+package ranchercluster
 
 import (
 	"encoding/json"
@@ -22,11 +22,27 @@ import (
 	capi "sigs.k8s.io/cluster-api/api/v1alpha4"
 )
 
-func objects(cluster *rancherv1.Cluster, dynamic *dynamic.Controller, dynamicSchema mgmtcontroller.DynamicSchemaCache) (result []runtime.Object, _ error) {
-	rkeCluster := rkeCluster(cluster)
-	result = append(result, rkeCluster)
+func getInfraRef(rkeCluster *rkev1.RKECluster) *corev1.ObjectReference {
+	gvk, _ := gvk.Get(rkeCluster)
+	infraRef := &corev1.ObjectReference{
+		Name: rkeCluster.Name,
+	}
+	infraRef.APIVersion, infraRef.Kind = gvk.ToAPIVersionAndKind()
+	return infraRef
+}
 
-	capiCluster := capiCluster(cluster, rkeCluster)
+func objects(cluster *rancherv1.Cluster, dynamic *dynamic.Controller, dynamicSchema mgmtcontroller.DynamicSchemaCache) (result []runtime.Object, _ error) {
+	infraRef := cluster.Spec.RKEConfig.InfrastructureRef
+	if infraRef == nil {
+		rkeCluster := rkeCluster(cluster)
+		infraRef = getInfraRef(rkeCluster)
+		result = append(result, rkeCluster)
+	}
+
+	rkeControlPlane := rkeControlPlane(cluster)
+	result = append(result, rkeControlPlane)
+
+	capiCluster := capiCluster(cluster, rkeControlPlane, infraRef)
 	result = append(result, capiCluster)
 
 	machineDeployments, err := machineDeployments(cluster, capiCluster, dynamic, dynamicSchema)
@@ -84,6 +100,9 @@ func toMachineTemplate(nodePoolName string, cluster *rancherv1.Cluster, nodePool
 	}
 
 	nodePoolData.Set("common", commonData)
+	if nodePool.CloudCredentialSecretName == "" {
+		nodePoolData.SetNested(cluster.Spec.CloudCredentialSecretName, "common", "cloudCredentialSecretName")
+	}
 
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -225,8 +244,16 @@ func rkeCluster(cluster *rancherv1.Cluster) *rkev1.RKECluster {
 			Name:      cluster.Name,
 			Namespace: cluster.Namespace,
 		},
-		Spec: rkev1.RKEClusterSpec{
-			CloudCredentialSecretName: cluster.Spec.CloudCredentialSecretName,
+	}
+}
+
+func rkeControlPlane(cluster *rancherv1.Cluster) *rkev1.RKEControlPlane {
+	return &rkev1.RKEControlPlane{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+		},
+		Spec: rkev1.RKEControlPlaneSpec{
 			RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 				UpgradeStrategy: rkev1.ClusterUpgradeStrategy{},
 			},
@@ -236,8 +263,8 @@ func rkeCluster(cluster *rancherv1.Cluster) *rkev1.RKECluster {
 	}
 }
 
-func capiCluster(cluster *rancherv1.Cluster, rkeCluster *rkev1.RKECluster) *capi.Cluster {
-	gvk, err := gvk.Get(rkeCluster)
+func capiCluster(cluster *rancherv1.Cluster, rkeControlPlane *rkev1.RKEControlPlane, infraRef *corev1.ObjectReference) *capi.Cluster {
+	gvk, err := gvk.Get(rkeControlPlane)
 	if err != nil {
 		// this is a build issue if it happens
 		panic(err)
@@ -251,10 +278,11 @@ func capiCluster(cluster *rancherv1.Cluster, rkeCluster *rkev1.RKECluster) *capi
 			Namespace: cluster.Namespace,
 		},
 		Spec: capi.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
+			InfrastructureRef: infraRef,
+			ControlPlaneRef: &corev1.ObjectReference{
 				Kind:       kind,
-				Namespace:  rkeCluster.Namespace,
-				Name:       rkeCluster.Name,
+				Namespace:  rkeControlPlane.Namespace,
+				Name:       rkeControlPlane.Name,
 				APIVersion: apiVersion,
 			},
 		},

@@ -11,11 +11,12 @@ import (
 	"github.com/rancher/rancher-operator/pkg/controllers/fleetcluster"
 	"github.com/rancher/rancher-operator/pkg/controllers/managerancher"
 	"github.com/rancher/rancher-operator/pkg/controllers/projects"
-	cluster2 "github.com/rancher/rancher-operator/pkg/controllers/rke/cluster"
-	"github.com/rancher/rancher-operator/pkg/controllers/rke/machine"
+	"github.com/rancher/rancher-operator/pkg/controllers/rke/bootstrap"
 	machine_provision "github.com/rancher/rancher-operator/pkg/controllers/rke/machine-provision"
 	"github.com/rancher/rancher-operator/pkg/controllers/rke/planner"
 	"github.com/rancher/rancher-operator/pkg/controllers/rke/planstatus"
+	"github.com/rancher/rancher-operator/pkg/controllers/rke/ranchercluster"
+	"github.com/rancher/rancher-operator/pkg/controllers/rke/rkecluster"
 	"github.com/rancher/rancher-operator/pkg/controllers/rke/unmanaged"
 	"github.com/rancher/rancher-operator/pkg/controllers/workspace"
 	"github.com/rancher/rancher-operator/pkg/crd"
@@ -50,8 +51,9 @@ func Register(ctx context.Context, capiEnabled, rkeEnabled, crdEnabled bool, sys
 
 	if rkeEnabled {
 		dynamicschema.Register(ctx, clients)
-		cluster2.Register(ctx, clients)
-		machine.Register(ctx, clients)
+		rkecluster.Register(ctx, clients)
+		ranchercluster.Register(ctx, clients)
+		bootstrap.Register(ctx, clients)
 		machine_provision.Register(ctx, clients)
 		planner.Register(ctx, clients)
 		planstatus.Register(ctx, clients)

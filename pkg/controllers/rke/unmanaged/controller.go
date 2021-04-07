@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha4"
 )
@@ -36,6 +37,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 		machineCache:     clients.CAPI.Machine().Cache(),
 		secrets:          clients.Core.Secret(),
 		apply: clients.Apply.WithSetID("unmanaged-machine").
+			WithSetOwnerReference(true, true).
 			WithCacheTypes(
 				clients.Management.Cluster(),
 				clients.Cluster.Cluster(),
@@ -56,6 +58,36 @@ type handler struct {
 	apply            apply.Apply
 }
 
+func (h *handler) findMachine(cluster *capi.Cluster, machineName, machineID string) error {
+	_, errNotFound := h.machineCache.Get(cluster.Namespace, machineName)
+	if errNotFound == nil {
+		return nil
+	} else if !apierror.IsNotFound(errNotFound) {
+		return errNotFound
+	}
+
+	if machineID == "" {
+		return errNotFound
+	}
+
+	machines, err := h.machineCache.List(cluster.Namespace, labels.SelectorFromSet(map[string]string{
+		"rke.cattle.io/machine-id": machineID,
+	}))
+	if err != nil {
+		return err
+	}
+
+	if len(machines) == 0 {
+		return errNotFound
+	}
+
+	if machines[0].Spec.ClusterName == cluster.Name {
+		return nil
+	}
+
+	return errNotFound
+}
+
 func (h *handler) onSecretChange(key string, secret *corev1.Secret) (*corev1.Secret, error) {
 	if secret == nil || secret.Type != machineRequestType {
 		return secret, nil
@@ -74,7 +106,7 @@ func (h *handler) onSecretChange(key string, secret *corev1.Secret) (*corev1.Sec
 		return secret, err
 	}
 
-	_, err = h.machineCache.Get(capiCluster.Namespace, secret.Name)
+	err = h.findMachine(capiCluster, secret.Name, data.String("id"))
 	if apierror.IsNotFound(err) {
 		err = h.createMachine(capiCluster, secret, data)
 	}
@@ -118,6 +150,8 @@ func (h *handler) createMachineObjects(capiCluster *capi.Cluster, machineName st
 	if data.Bool("role-worker") {
 		labels[planner.WorkerRoleLabel] = "true"
 	}
+
+	labels["rke.cattle.io/machine-id"] = data.String("id")
 
 	labelsMap := map[string]string{}
 	for _, str := range strings.Split(data.String("label"), ",") {

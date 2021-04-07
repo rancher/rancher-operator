@@ -56,5 +56,6 @@ type RKEMachinePoolRollingUpdate struct {
 type RKEConfig struct {
 	rkev1.RKEClusterSpecCommon
 
-	NodePools []RKENodePool `json:"nodePools,omitempty"`
+	NodePools         []RKENodePool           `json:"nodePools,omitempty"`
+	InfrastructureRef *corev1.ObjectReference `json:"infrastructureRef,omitempty"`
 }

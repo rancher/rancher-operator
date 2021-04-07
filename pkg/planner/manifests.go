@@ -8,11 +8,11 @@ import (
 	"github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1/plan"
 )
 
-func (p *Planner) getControlPlaneManifests(cluster *rkev1.RKECluster, runtime string) ([]plan.File, error) {
+func (p *Planner) getControlPlaneManifests(controlPlane *rkev1.RKEControlPlane, runtime string) ([]plan.File, error) {
 	// NOTE: The agent does not have a means to delete files.  If you add a manifest that
 	// may not exist in the future then you should create an empty file to "delete" the file
 
-	clusterAgent, err := p.getClusterAgent(cluster, runtime)
+	clusterAgent, err := p.getClusterAgent(controlPlane, runtime)
 	if err != nil {
 		return nil, err
 	}
@@ -22,8 +22,8 @@ func (p *Planner) getControlPlaneManifests(cluster *rkev1.RKECluster, runtime st
 	}, nil
 }
 
-func (p *Planner) getClusterAgent(cluster *rkev1.RKECluster, runtime string) (plan.File, error) {
-	data, err := p.loadClusterAgent(cluster)
+func (p *Planner) getClusterAgent(controlPlane *rkev1.RKEControlPlane, runtime string) (plan.File, error) {
+	data, err := p.loadClusterAgent(controlPlane)
 	if err != nil {
 		return plan.File{}, err
 	}

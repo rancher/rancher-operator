@@ -1,4 +1,4 @@
-package cluster
+package ranchercluster
 
 import (
 	"context"
@@ -7,11 +7,11 @@ import (
 
 	"github.com/rancher/lasso/pkg/dynamic"
 	rancherv1 "github.com/rancher/rancher-operator/pkg/apis/rancher.cattle.io/v1"
-	v1 "github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/clients"
+	capicontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/cluster.x-k8s.io/v1alpha4"
 	mgmtcontroller "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
 	rocontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/rancher.cattle.io/v1"
-	clustercontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/rke.cattle.io/v1"
+	rkecontroller "github.com/rancher/rancher-operator/pkg/generated/controllers/rke.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/condition"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -29,12 +29,12 @@ const (
 type handler struct {
 	dynamic           *dynamic.Controller
 	dynamicSchema     mgmtcontroller.DynamicSchemaCache
-	clusterClient     clustercontrollers.RKEClusterClient
 	clusterCache      rocontrollers.ClusterCache
 	clusterController rocontrollers.ClusterController
 	secretCache       corecontrollers.SecretCache
 	secretClient      corecontrollers.SecretClient
-	rkeClusters       clustercontrollers.RKEClusterCache
+	capiClusters      capicontrollers.ClusterCache
+	rkeControlPlane   rkecontroller.RKEControlPlaneCache
 }
 
 func Register(ctx context.Context, clients *clients.Clients) {
@@ -43,27 +43,20 @@ func Register(ctx context.Context, clients *clients.Clients) {
 		dynamicSchema:     clients.Management.DynamicSchema().Cache(),
 		secretCache:       clients.Core.Secret().Cache(),
 		secretClient:      clients.Core.Secret(),
-		clusterClient:     clients.RKE.RKECluster(),
 		clusterCache:      clients.Cluster.Cluster().Cache(),
 		clusterController: clients.Cluster.Cluster(),
-		rkeClusters:       clients.RKE.RKECluster().Cache(),
+		capiClusters:      clients.CAPI.Cluster().Cache(),
+		rkeControlPlane:   clients.RKE.RKEControlPlane().Cache(),
 	}
 
-	clients.RKE.RKECluster().OnChange(ctx, "rke", h.UpdateSpec)
 	clients.Dynamic.OnChange(ctx, "rke", matchRKENodeGroup, h.infraWatch)
 	clients.Cluster.Cluster().Cache().AddIndexer(byNodeInfra, byNodeInfraIndex)
-
-	clustercontrollers.RegisterRKEClusterStatusHandler(ctx,
-		clients.RKE.RKECluster(),
-		"Defined",
-		"rke-cluster",
-		h.OnChange)
 
 	rocontrollers.RegisterClusterGeneratingHandler(ctx,
 		clients.Cluster.Cluster(),
 		clients.Apply.
 			WithSetID("rke-cluster").
-			WithSetOwnerReference(false, false).
+			WithSetOwnerReference(false, true).
 			WithDynamicLookup().
 			WithCacheTypes(
 				clients.CAPI.Cluster(),
@@ -138,28 +131,6 @@ func (h *handler) infraWatch(obj runtime.Object) (runtime.Object, error) {
 	return obj, nil
 }
 
-func (h *handler) UpdateSpec(key string, cluster *v1.RKECluster) (*v1.RKECluster, error) {
-	if cluster == nil {
-		return nil, nil
-	}
-
-	if cluster.Spec.ControlPlaneEndpoint == nil {
-		cluster := cluster.DeepCopy()
-		cluster.Spec.ControlPlaneEndpoint = &v1.Endpoint{
-			Host: "localhost",
-			Port: 6443,
-		}
-		return h.clusterClient.Update(cluster)
-	}
-
-	return cluster, nil
-}
-
-func (h *handler) OnChange(obj *v1.RKECluster, status v1.RKEClusterStatus) (v1.RKEClusterStatus, error) {
-	status.Ready = condition.Cond("Provisioned").IsTrue(&status)
-	return status, nil
-}
-
 func (h *handler) OnRancherClusterChange(obj *rancherv1.Cluster, status rancherv1.ClusterStatus) ([]runtime.Object, rancherv1.ClusterStatus, error) {
 	if obj.Spec.RKEConfig == nil || obj.Status.ClusterName == "" {
 		return nil, status, nil
@@ -175,15 +146,25 @@ func (h *handler) OnRancherClusterChange(obj *rancherv1.Cluster, status rancherv
 }
 
 func (h *handler) updateClusterProvisioningStatus(cluster *rancherv1.Cluster, status rancherv1.ClusterStatus) (rancherv1.ClusterStatus, error) {
-	rkeCluster, err := h.rkeClusters.Get(cluster.Namespace, cluster.Name)
+	capiCluster, err := h.capiClusters.Get(cluster.Namespace, cluster.Name)
 	if apierror.IsNotFound(err) {
 		return status, nil
 	} else if err != nil {
 		return status, err
 	}
 
-	Provisioned.SetStatus(&status, Provisioned.GetStatus(rkeCluster))
-	Provisioned.Reason(&status, Provisioned.GetReason(rkeCluster))
-	Provisioned.Message(&status, Provisioned.GetMessage(rkeCluster))
+	if capiCluster.Spec.ControlPlaneRef == nil ||
+		capiCluster.Spec.ControlPlaneRef.Kind != "RKEControlPlane" {
+		return status, nil
+	}
+
+	cp, err := h.rkeControlPlane.Get(cluster.Namespace, capiCluster.Spec.ControlPlaneRef.Name)
+	if err != nil {
+		return status, err
+	}
+
+	Provisioned.SetStatus(&status, Provisioned.GetStatus(cp))
+	Provisioned.Reason(&status, Provisioned.GetReason(cp))
+	Provisioned.Message(&status, Provisioned.GetMessage(cp))
 	return status, nil
 }

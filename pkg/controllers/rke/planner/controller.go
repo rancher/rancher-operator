@@ -6,7 +6,7 @@ import (
 
 	rkev1 "github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/clients"
-	"github.com/rancher/rancher-operator/pkg/controllers/rke/machine"
+	"github.com/rancher/rancher-operator/pkg/controllers/rke/bootstrap"
 	v1 "github.com/rancher/rancher-operator/pkg/generated/controllers/rke.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/planner"
 	"github.com/rancher/wrangler/pkg/condition"
@@ -29,11 +29,11 @@ func Register(ctx context.Context, clients *clients.Clients) {
 	h := handler{
 		planner: planner.New(ctx, clients),
 	}
-	v1.RegisterRKEClusterStatusHandler(ctx,
-		clients.RKE.RKECluster(), "", "planner", h.OnChange)
+	v1.RegisterRKEControlPlaneStatusHandler(ctx,
+		clients.RKE.RKEControlPlane(), "", "planner", h.OnChange)
 	relatedresource.Watch(ctx, "planner", func(namespace, name string, obj runtime.Object) ([]relatedresource.Key, error) {
 		if secret, ok := obj.(*corev1.Secret); ok {
-			clusterName := secret.Labels[machine.ClusterNameLabel]
+			clusterName := secret.Labels[bootstrap.ClusterNameLabel]
 			if clusterName != "" {
 				return []relatedresource.Key{{
 					Namespace: secret.Namespace,
@@ -47,10 +47,10 @@ func Register(ctx context.Context, clients *clients.Clients) {
 			}}, nil
 		}
 		return nil, nil
-	}, clients.RKE.RKECluster(), clients.Core.Secret(), clients.CAPI.Machine())
+	}, clients.RKE.RKEControlPlane(), clients.Core.Secret(), clients.CAPI.Machine())
 }
 
-func (h *handler) OnChange(cluster *rkev1.RKECluster, status rkev1.RKEClusterStatus) (rkev1.RKEClusterStatus, error) {
+func (h *handler) OnChange(cluster *rkev1.RKEControlPlane, status rkev1.RKEControlPlaneStatus) (rkev1.RKEControlPlaneStatus, error) {
 	status.ObservedGeneration = cluster.Generation
 
 	err := h.planner.Process(cluster)

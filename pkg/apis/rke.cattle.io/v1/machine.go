@@ -6,9 +6,10 @@ import (
 )
 
 type RKECommonNodeConfig struct {
-	HostnamePrefix string            `json:"hostnamePrefix,omitempty"`
-	Labels         map[string]string `json:"labels,omitempty"`
-	Taints         []corev1.Taint    `json:"taints,omitempty"`
+	HostnamePrefix            string            `json:"hostnamePrefix,omitempty"`
+	Labels                    map[string]string `json:"labels,omitempty"`
+	Taints                    []corev1.Taint    `json:"taints,omitempty"`
+	CloudCredentialSecretName string            `json:"cloudCredentialSecretName,omitempty"`
 }
 
 type RKEMachineStatus struct {

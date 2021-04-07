@@ -9,10 +9,13 @@ import (
 	"strings"
 
 	"github.com/rancher/rancher-operator/pkg/clients"
+	capicontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/cluster.x-k8s.io/v1alpha4"
 	mgmtcontroller "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
+	rkecontroller "github.com/rancher/rancher-operator/pkg/generated/controllers/rke.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/settings"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	"github.com/rancher/wrangler/pkg/name"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,6 +25,7 @@ import (
 )
 
 const (
+	machineIDLabel        = "rke.cattle.io/machine-id"
 	machineNameLabel      = "rke.cattle.io/machine-name"
 	machineNamespaceLabel = "rke.cattle.io/machine-namespace"
 	planSecret            = "rke.cattle.io/plan-secret-name"
@@ -41,6 +45,9 @@ type RKE2ConfigServer struct {
 	secretsCache         corecontrollers.SecretCache
 	secrets              corecontrollers.SecretClient
 	settings             mgmtcontroller.SettingCache
+	machineCache         capicontrollers.MachineCache
+	machines             capicontrollers.MachineClient
+	bootstrapCache       rkecontroller.RKEBootstrapCache
 }
 
 func New(clients *clients.Clients) *RKE2ConfigServer {
@@ -64,6 +71,9 @@ func New(clients *clients.Clients) *RKE2ConfigServer {
 		secrets:              clients.Core.Secret(),
 		clusterTokenCache:    clients.Management.ClusterRegistrationToken().Cache(),
 		settings:             clients.Management.Setting().Cache(),
+		machineCache:         clients.CAPI.Machine().Cache(),
+		machines:             clients.CAPI.Machine(),
+		bootstrapCache:       clients.RKE.RKEBootstrap().Cache(),
 	}
 }
 
@@ -127,6 +137,11 @@ func (r *RKE2ConfigServer) ServeHTTP(rw http.ResponseWriter, req *http.Request) 
 }
 
 func (r *RKE2ConfigServer) findSA(req *http.Request) (string, *corev1.Secret, error) {
+	machineID := req.Header.Get(nameHeader)
+	if machineID == "" {
+		return "", nil, nil
+	}
+
 	machineNamespace, machineName, err := r.findMachineByProvisioningSA(req)
 	if err != nil {
 		return "", nil, err
@@ -140,6 +155,10 @@ func (r *RKE2ConfigServer) findSA(req *http.Request) (string, *corev1.Secret, er
 
 	if machineName == "" {
 		return "", nil, nil
+	}
+
+	if err := r.setOrUpdateMachineID(machineNamespace, machineName, machineID); err != nil {
+		return "", nil, err
 	}
 
 	planSAs, err := r.serviceAccountsCache.List(machineNamespace, labels.SelectorFromSet(map[string]string{
@@ -180,6 +199,46 @@ func (r *RKE2ConfigServer) findSA(req *http.Request) (string, *corev1.Secret, er
 	return "", nil, fmt.Errorf("timeout waiting for plan")
 }
 
+func (r *RKE2ConfigServer) setOrUpdateMachineID(machineNamespace, machineName, machineID string) error {
+	machine, err := r.machineCache.Get(machineNamespace, machineName)
+	if err != nil {
+		return err
+	}
+
+	machineID = name.SafeConcatName(machineID)
+
+	if machine.Labels[machineIDLabel] == machineID {
+		return nil
+	}
+
+	machine = machine.DeepCopy()
+	if machine.Labels == nil {
+		machine.Labels = map[string]string{}
+	}
+
+	machine.Labels[machineIDLabel] = machineID
+	_, err = r.machines.Update(machine)
+	return err
+}
+
+func (r *RKE2ConfigServer) isOwnedByMachine(machineName string, sa *corev1.ServiceAccount) (bool, error) {
+	for _, owner := range sa.OwnerReferences {
+		if owner.Kind == "RKEBootstrap" {
+			bootstrap, err := r.bootstrapCache.Get(sa.Namespace, owner.Name)
+			if err != nil {
+				return false, err
+			}
+			for _, owner := range bootstrap.OwnerReferences {
+				if owner.Kind == "Machine" && owner.Name == machineName {
+					return true, nil
+				}
+			}
+		}
+	}
+
+	return false, nil
+}
+
 func (r *RKE2ConfigServer) getSecret(machineName string, planSA *corev1.ServiceAccount) (string, *corev1.Secret, error) {
 	if planSA.Labels[machineNameLabel] != machineName ||
 		planSA.Labels[roleLabel] != rolePlan ||
@@ -191,16 +250,8 @@ func (r *RKE2ConfigServer) getSecret(machineName string, planSA *corev1.ServiceA
 		return "", nil, nil
 	}
 
-	foundParent := false
-	for _, owner := range planSA.OwnerReferences {
-		if owner.Kind == "Machine" && owner.Name == machineName {
-			foundParent = true
-			break
-		}
-	}
-
-	if !foundParent {
-		return "", nil, nil
+	if foundParent, err := r.isOwnedByMachine(machineName, planSA); err != nil || !foundParent {
+		return "", nil, err
 	}
 
 	secret, err := r.secretsCache.Get(planSA.Namespace, planSA.Secrets[0].Name)

@@ -26,6 +26,7 @@ import (
 	apierror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha4"
 )
 
@@ -77,6 +78,7 @@ type Planner struct {
 	machines                      capicontrollers.MachineClient
 	clusterRegistrationTokenCache mgmtcontrollers.ClusterRegistrationTokenCache
 	settings                      mgmtcontrollers.SettingCache
+	capiClusters                  capicontrollers.ClusterCache
 	kubeconfig                    *kubeconfig.Manager
 }
 
@@ -93,21 +95,40 @@ func New(ctx context.Context, clients *clients.Clients) *Planner {
 		secretCache:                   clients.Core.Secret().Cache(),
 		clusterRegistrationTokenCache: clients.Management.ClusterRegistrationToken().Cache(),
 		settings:                      clients.Management.Setting().Cache(),
+		capiClusters:                  clients.CAPI.Cluster().Cache(),
 		kubeconfig:                    kubeconfig.New(clients),
 	}
 }
 
-func PlanSecretFromMachine(obj *capi.Machine) string {
-	return name.SafeConcatName(obj.Name, "machine", "plan")
+func PlanSecretFromBootstrapName(bootstrapName string) string {
+	return name.SafeConcatName(bootstrapName, "machine", "plan")
 }
 
-func (p *Planner) Process(cluster *rkev1.RKECluster) error {
+func (p *Planner) getCAPICluster(controlPlane *rkev1.RKEControlPlane) (*capi.Cluster, error) {
+	ref := metav1.GetControllerOf(controlPlane)
+	if ref == nil {
+		return nil, fmt.Errorf("RKEControlPlane %s/%s has no owner", controlPlane.Namespace, controlPlane.Name)
+	}
+	gvk := schema.FromAPIVersionAndKind(ref.APIVersion, ref.Kind)
+	if gvk.Kind != "Cluster" || gvk.Group != "cluster.x-k8s.io" {
+		return nil, fmt.Errorf("RKEControlPlane %s/%s has wrong owner kind %s/%s", controlPlane.Namespace,
+			controlPlane.Name, ref.APIVersion, ref.Kind)
+	}
+	return p.capiClusters.Get(controlPlane.Namespace, ref.Name)
+}
+
+func (p *Planner) Process(controlPlane *rkev1.RKEControlPlane) error {
+	cluster, err := p.getCAPICluster(controlPlane)
+	if err != nil {
+		return err
+	}
+
 	plan, err := p.store.Load(cluster)
 	if err != nil {
 		return err
 	}
 
-	cluster, secret, err := p.generateSecrets(cluster)
+	controlPlane, secret, err := p.generateSecrets(controlPlane)
 	if err != nil {
 		return err
 	}
@@ -118,7 +139,7 @@ func (p *Planner) Process(cluster *rkev1.RKECluster) error {
 
 	var firstIgnoreError error
 
-	err = p.reconcile(cluster, secret, plan, "bootstrap", isInitNode, none, cluster.Spec.UpgradeStrategy.ServerConcurrency, "")
+	err = p.reconcile(controlPlane, secret, plan, "bootstrap", isInitNode, none, controlPlane.Spec.UpgradeStrategy.ServerConcurrency, "")
 	firstIgnoreError, err = ignoreErrors(firstIgnoreError, err)
 	if err != nil {
 		return err
@@ -129,19 +150,19 @@ func (p *Planner) Process(cluster *rkev1.RKECluster) error {
 		return err
 	}
 
-	err = p.reconcile(cluster, secret, plan, "etcd", isEtcd, isInitNode, cluster.Spec.UpgradeStrategy.ServerConcurrency, joinServer)
+	err = p.reconcile(controlPlane, secret, plan, "etcd", isEtcd, isInitNode, controlPlane.Spec.UpgradeStrategy.ServerConcurrency, joinServer)
 	firstIgnoreError, err = ignoreErrors(firstIgnoreError, err)
 	if err != nil {
 		return err
 	}
 
-	err = p.reconcile(cluster, secret, plan, "control plane", isControlPlane, isInitNode, cluster.Spec.UpgradeStrategy.ServerConcurrency, joinServer)
+	err = p.reconcile(controlPlane, secret, plan, "control plane", isControlPlane, isInitNode, controlPlane.Spec.UpgradeStrategy.ServerConcurrency, joinServer)
 	firstIgnoreError, err = ignoreErrors(firstIgnoreError, err)
 	if err != nil {
 		return err
 	}
 
-	err = p.reconcile(cluster, secret, plan, "worker", isOnlyWorker, isInitNode, cluster.Spec.UpgradeStrategy.WorkerConcurrency, joinServer)
+	err = p.reconcile(controlPlane, secret, plan, "worker", isOnlyWorker, isInitNode, controlPlane.Spec.UpgradeStrategy.WorkerConcurrency, joinServer)
 	firstIgnoreError, err = ignoreErrors(firstIgnoreError, err)
 	if err != nil {
 		return err
@@ -163,10 +184,6 @@ func ignoreErrors(firstIgnoreError error, err error) (error, error) {
 		return firstIgnoreError, nil
 	}
 	return firstIgnoreError, err
-}
-
-func (p *Planner) CurrentPlan(cluster *rkev1.RKECluster) (*plan.Plan, error) {
-	return p.store.Load(cluster)
 }
 
 func (p *Planner) clearInitNodeMark(machine *capi.Machine) error {
@@ -224,7 +241,7 @@ func (p *Planner) electInitNode(plan *plan.Plan) (string, error) {
 	return machine.Annotations[JoinURLAnnotation], nil
 }
 
-func (p *Planner) reconcile(cluster *rkev1.RKECluster, secret plan.Secret, plan *plan.Plan,
+func (p *Planner) reconcile(controlPlane *rkev1.RKEControlPlane, secret plan.Secret, plan *plan.Plan,
 	tierName string,
 	include, exclude roleFilter, concurrency int, joinServer string) error {
 	entries, unavailable := collect(plan, include)
@@ -249,7 +266,7 @@ func (p *Planner) reconcile(cluster *rkev1.RKECluster, secret plan.Secret, plan 
 			nonReady = append(nonReady, entry.Machine.Name)
 		}
 
-		plan, err := p.desiredPlan(cluster, secret, entry, isInitNode(entry.Machine), joinServer)
+		plan, err := p.desiredPlan(controlPlane, secret, entry, isInitNode(entry.Machine), joinServer)
 		if err != nil {
 			return err
 		}
@@ -309,22 +326,22 @@ func atMostThree(names []string) []string {
 	return names
 }
 
-func (p *Planner) desiredPlan(cluster *rkev1.RKECluster, secret plan.Secret, entry planEntry, initNode bool, joinServer string) (result plan.NodePlan, _ error) {
+func (p *Planner) desiredPlan(controlPlane *rkev1.RKEControlPlane, secret plan.Secret, entry planEntry, initNode bool, joinServer string) (result plan.NodePlan, _ error) {
 	agent := false
 	config := map[string]interface{}{}
-	for _, opts := range cluster.Spec.Config {
+	for _, opts := range controlPlane.Spec.Config {
 		sel, err := metav1.LabelSelectorAsSelector(opts.MachineLabelSelector)
 		if err != nil {
 			return result, err
 		}
-		if sel.Matches(labels.Set(cluster.Labels)) {
+		if sel.Matches(labels.Set(controlPlane.Labels)) {
 			config = opts.Config.DeepCopy().Data
 			break
 		}
 	}
 
 	if initNode {
-		if GetRuntime(cluster.Spec.KubernetesVersion) == RuntimeK3S {
+		if GetRuntime(controlPlane.Spec.KubernetesVersion) == RuntimeK3S {
 			config["cluster-init"] = true
 		}
 	} else {
@@ -340,10 +357,10 @@ func (p *Planner) desiredPlan(cluster *rkev1.RKECluster, secret plan.Secret, ent
 		agent = true
 	}
 
-	runtime := GetRuntime(cluster.Spec.KubernetesVersion)
+	runtime := GetRuntime(controlPlane.Spec.KubernetesVersion)
 
 	if isControlPlane(entry.Machine) {
-		data, err := p.loadClusterAgent(cluster)
+		data, err := p.loadClusterAgent(controlPlane)
 		if err != nil {
 			return result, err
 		}
@@ -353,7 +370,7 @@ func (p *Planner) desiredPlan(cluster *rkev1.RKECluster, secret plan.Secret, ent
 		})
 	}
 
-	image, err := p.getInstallerImage(cluster)
+	image, err := p.getInstallerImage(controlPlane)
 	if err != nil {
 		return result, err
 	}
@@ -415,7 +432,7 @@ func (p *Planner) desiredPlan(cluster *rkev1.RKECluster, secret plan.Secret, ent
 
 	result.Files = append(result.Files, plan.File{
 		Content: base64.StdEncoding.EncodeToString(configData),
-		Path:    fmt.Sprintf("/etc/rancher/%s/config.yaml", GetRuntime(cluster.Spec.KubernetesVersion)),
+		Path:    fmt.Sprintf("/etc/rancher/%s/config.yaml", GetRuntime(controlPlane.Spec.KubernetesVersion)),
 	})
 
 	return result, nil
@@ -428,18 +445,18 @@ func GetRuntime(kubernetesVersion string) string {
 	return RuntimeRKE2
 }
 
-func (p *Planner) getInstallerImage(cluster *rkev1.RKECluster) (string, error) {
+func (p *Planner) getInstallerImage(controlPlane *rkev1.RKEControlPlane) (string, error) {
 	if true {
 		// The only working image right now
 		return "docker.io/oats87/system-agent-installer-rke2:v1.19.8-alpha1-rke2r2", nil
 	}
 
-	runtime := GetRuntime(cluster.Spec.KubernetesVersion)
+	runtime := GetRuntime(controlPlane.Spec.KubernetesVersion)
 	image, err := settings.Get(p.settings, "system-agent-installer-image")
 	if err != nil {
 		return "", err
 	}
-	image = image + runtime + ":" + strings.ReplaceAll(cluster.Spec.KubernetesVersion, "+", "-")
+	image = image + runtime + ":" + strings.ReplaceAll(controlPlane.Spec.KubernetesVersion, "+", "-")
 	return settings.PrefixPrivateRegistry(p.settings, image)
 }
 
@@ -493,20 +510,20 @@ func collect(plan *plan.Plan, include func(*capi.Machine) bool) (result []planEn
 	return result, unavailable
 }
 
-func (p *Planner) generateSecrets(cluster *rkev1.RKECluster) (*rkev1.RKECluster, plan.Secret, error) {
-	secretName, secret, err := p.ensureRKEStateSecret(cluster)
+func (p *Planner) generateSecrets(controlPlane *rkev1.RKEControlPlane) (*rkev1.RKEControlPlane, plan.Secret, error) {
+	secretName, secret, err := p.ensureRKEStateSecret(controlPlane)
 	if err != nil {
 		return nil, secret, err
 	}
 
-	cluster = cluster.DeepCopy()
-	cluster.Status.ClusterStateSecretName = secretName
-	return cluster, secret, nil
+	controlPlane = controlPlane.DeepCopy()
+	controlPlane.Status.ClusterStateSecretName = secretName
+	return controlPlane, secret, nil
 }
 
-func (p *Planner) ensureRKEStateSecret(obj *rkev1.RKECluster) (string, plan.Secret, error) {
-	name := name.SafeConcatName(obj.Name, "rke", "state")
-	secret, err := p.secretCache.Get(obj.Namespace, name)
+func (p *Planner) ensureRKEStateSecret(controlPlane *rkev1.RKEControlPlane) (string, plan.Secret, error) {
+	name := name.SafeConcatName(controlPlane.Name, "rke", "state")
+	secret, err := p.secretCache.Get(controlPlane.Namespace, name)
 	if apierror.IsNotFound(err) {
 		serverToken, err := randomtoken.Generate()
 		if err != nil {
@@ -521,7 +538,7 @@ func (p *Planner) ensureRKEStateSecret(obj *rkev1.RKECluster) (string, plan.Secr
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
-				Namespace: obj.Namespace,
+				Namespace: controlPlane.Namespace,
 			},
 			Data: map[string][]byte{
 				"serverToken": []byte(serverToken),

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	rkev1 "github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1"
-	machine2 "github.com/rancher/rancher-operator/pkg/controllers/rke/machine"
 	"github.com/rancher/rancher-operator/pkg/util"
 	"github.com/rancher/wrangler/pkg/data"
 	name2 "github.com/rancher/wrangler/pkg/name"
@@ -68,7 +67,7 @@ func (h *handler) getArgsEnvAndStatus(typeMeta meta.Type, meta metav1.Object, da
 		Data: map[string][]byte{},
 	}
 
-	bootstrapName, cloudCredentialSecretName, secrets, err := h.getSecretData(meta, data.String("status", "cloudCredentialSecretName"))
+	bootstrapName, cloudCredentialSecretName, secrets, err := h.getSecretData(meta, data)
 	if err != nil {
 		return driverArgs{}, err
 	}
@@ -137,72 +136,49 @@ func (h *handler) getBootstrapSecret(machine *capi.Machine) (string, error) {
 	return d.String("status", "dataSecretName"), nil
 }
 
-func (h *handler) getCloudCredentialSecret(meta metav1.Object, machineName string) (string, *capi.Machine, error) {
-	machine, err := h.machines.Get(meta.GetNamespace(), machineName)
-	if apierror.IsNotFound(err) {
-		return "", machine, nil
-	} else if err != nil {
-		return "", machine, err
-	}
-
-	cluster, err := h.clusters.Get(meta.GetNamespace(), machine.Spec.ClusterName)
-	if apierror.IsNotFound(err) {
-		return "", machine, nil
-	} else if err != nil {
-		return "", machine, err
-	}
-
-	if !machine2.IsRKECluster(&cluster.Spec) {
-		return "", machine, err
-	}
-
-	rkeCluster, err := h.rkeClusters.Get(meta.GetNamespace(), cluster.Spec.InfrastructureRef.Name)
-	if apierror.IsNotFound(err) {
-		return "", machine, nil
-	} else if err != nil {
-		return "", machine, err
-	}
-	return rkeCluster.Spec.CloudCredentialSecretName, machine, nil
-}
-
-func (h *handler) getSecretData(meta metav1.Object, oldCredential string) (string, string, map[string]string, error) {
+func (h *handler) getSecretData(meta metav1.Object, obj data.Object) (string, string, map[string]string, error) {
 	var (
-		err                       error
-		machine                   *capi.Machine
-		result                    = map[string]string{}
-		bootstrapName             = ""
-		cloudCredentialSecretName = ""
+		err     error
+		machine *capi.Machine
+		result  = map[string]string{}
 	)
+
+	oldCredential := obj.String("status", "cloudCredentialSecretName")
+	cloudCredentialSecretName := obj.String("spec", "common", "cloudCredentialSecretName")
 
 	for _, ref := range meta.GetOwnerReferences() {
 		if ref.Kind != "Machine" {
 			continue
 		}
 
-		cloudCredentialSecretName, machine, err = h.getCloudCredentialSecret(meta, ref.Name)
+		machine, err = h.machines.Get(meta.GetNamespace(), ref.Name)
+		if err != nil {
+			return "", "", nil, err
+		}
+	}
+
+	if machine == nil {
+		return "", "", nil, fmt.Errorf("failed to find capi machine for %s/%s", meta.GetNamespace(), meta.GetName())
+	}
+
+	if cloudCredentialSecretName == "" {
+		cloudCredentialSecretName = oldCredential
+	}
+
+	if cloudCredentialSecretName != "" {
+		secret, err := h.secrets.Get(meta.GetNamespace(), cloudCredentialSecretName)
 		if err != nil {
 			return "", "", nil, err
 		}
 
-		if cloudCredentialSecretName == "" {
-			cloudCredentialSecretName = oldCredential
+		for k, v := range secret.Data {
+			result[k] = string(v)
 		}
+	}
 
-		if cloudCredentialSecretName != "" {
-			secret, err := h.secrets.Get(meta.GetNamespace(), cloudCredentialSecretName)
-			if err != nil {
-				return "", "", nil, err
-			}
-
-			for k, v := range secret.Data {
-				result[k] = string(v)
-			}
-		}
-
-		bootstrapName, err = h.getBootstrapSecret(machine)
-		if err != nil {
-			return "", "", nil, err
-		}
+	bootstrapName, err := h.getBootstrapSecret(machine)
+	if err != nil {
+		return "", "", nil, err
 	}
 
 	return bootstrapName, cloudCredentialSecretName, result, nil

@@ -1,14 +1,13 @@
 package plan
 
 import (
-	rkev1 "github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha4"
 )
 
 type Plan struct {
 	Nodes    map[string]*Node         `json:"nodes,omitempty"`
 	Machines map[string]*capi.Machine `json:"machines,omitempty"`
-	Cluster  *rkev1.RKECluster        `json:"cluster,omitempty"`
+	Cluster  *capi.Cluster            `json:"cluster,omitempty"`
 }
 
 type Node struct {

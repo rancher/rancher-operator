@@ -31,8 +31,8 @@ func DownloadClusterAgentYAML(ctx context.Context, url, ca string, token, cluste
 	return client.Get().AbsPath("v3", "import", fmt.Sprintf("%v_%v.yaml", token, clusterID)).Do(ctx).Raw()
 }
 
-func (p *Planner) loadClusterAgent(cluster *rkev1.RKECluster) ([]byte, error) {
-	tokens, err := p.clusterRegistrationTokenCache.GetByIndex(clusterRegToken, cluster.Spec.ManagementClusterName)
+func (p *Planner) loadClusterAgent(controlPlane *rkev1.RKEControlPlane) ([]byte, error) {
+	tokens, err := p.clusterRegistrationTokenCache.GetByIndex(clusterRegToken, controlPlane.Spec.ManagementClusterName)
 	if err != nil {
 		return nil, err
 	}
@@ -50,5 +50,5 @@ func (p *Planner) loadClusterAgent(cluster *rkev1.RKECluster) ([]byte, error) {
 		return nil, fmt.Errorf("no cluster registration token found")
 	}
 
-	return DownloadClusterAgentYAML(p.ctx, url, ca, tokens[0].Status.Token, cluster.Spec.ManagementClusterName)
+	return DownloadClusterAgentYAML(p.ctx, url, ca, tokens[0].Status.Token, controlPlane.Spec.ManagementClusterName)
 }

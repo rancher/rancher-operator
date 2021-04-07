@@ -8,11 +8,11 @@ import (
 
 	"github.com/rancher/rancher-operator/pkg/clients"
 	capicontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/cluster.x-k8s.io/v1alpha4"
+	rkecontroller "github.com/rancher/rancher-operator/pkg/generated/controllers/rke.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/planner"
 	"github.com/rancher/wrangler/pkg/condition"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capi "sigs.k8s.io/cluster-api/api/v1alpha4"
 )
@@ -22,16 +22,18 @@ const (
 )
 
 type handler struct {
-	secrets      corecontrollers.SecretClient
-	machines     capicontrollers.MachineClient
-	machineCache capicontrollers.MachineCache
+	secrets        corecontrollers.SecretClient
+	machines       capicontrollers.MachineClient
+	machineCache   capicontrollers.MachineCache
+	bootstrapCache rkecontroller.RKEBootstrapCache
 }
 
 func Register(ctx context.Context, clients *clients.Clients) {
 	h := handler{
-		secrets:      clients.Core.Secret(),
-		machines:     clients.CAPI.Machine(),
-		machineCache: clients.CAPI.Machine().Cache(),
+		secrets:        clients.Core.Secret(),
+		machines:       clients.CAPI.Machine(),
+		machineCache:   clients.CAPI.Machine().Cache(),
+		bootstrapCache: clients.RKE.RKEBootstrap().Cache(),
 	}
 	clients.Core.Secret().OnChange(ctx, "plan-status", h.OnChange)
 }
@@ -43,14 +45,22 @@ func (h *handler) updateMachineProvisionStatus(secret *corev1.Secret) error {
 	}
 
 	machine, err := h.machineCache.Get(secret.Namespace, machineName)
-	if apierror.IsNotFound(err) {
+	if err != nil {
+		return err
+	}
+
+	if machine.Spec.Bootstrap.ConfigRef == nil &&
+		machine.Spec.Bootstrap.ConfigRef.Kind != "RKEBootstrap" {
 		return nil
-	} else if err != nil {
+	}
+
+	rkeBootstrap, err := h.bootstrapCache.Get(secret.Namespace, machine.Spec.Bootstrap.ConfigRef.Name)
+	if err != nil {
 		return err
 	}
 
 	// make sure there's no funny business going on here
-	if planner.PlanSecretFromMachine(machine) != secret.Name {
+	if planner.PlanSecretFromBootstrapName(rkeBootstrap.Name) != secret.Name {
 		return nil
 	}
 

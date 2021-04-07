@@ -3,8 +3,8 @@ package planner
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 
-	rkev1 "github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/apis/rke.cattle.io/v1/plan"
 	capicontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/cluster.x-k8s.io/v1alpha4"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
@@ -42,7 +42,17 @@ func NewStore(secrets corecontrollers.SecretController,
 	}
 }
 
-func (p *PlanStore) Load(cluster *rkev1.RKECluster) (*plan.Plan, error) {
+func onlyRKE(machines []*capi.Machine) (result []*capi.Machine) {
+	for _, m := range machines {
+		if !isRKEBootstrap(m) {
+			continue
+		}
+		result = append(result, m)
+	}
+	return
+}
+
+func (p *PlanStore) Load(cluster *capi.Cluster) (*plan.Plan, error) {
 	result := &plan.Plan{
 		Nodes:    map[string]*plan.Node{},
 		Machines: map[string]*capi.Machine{},
@@ -55,6 +65,8 @@ func (p *PlanStore) Load(cluster *rkev1.RKECluster) (*plan.Plan, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	machines = onlyRKE(machines)
 
 	secrets, err := p.getSecrets(machines)
 	if err != nil {
@@ -120,7 +132,7 @@ func SecretToNode(secret *corev1.Secret) (*plan.Node, error) {
 func (p *PlanStore) getSecrets(machines []*capi.Machine) (map[string]*corev1.Secret, error) {
 	result := map[string]*corev1.Secret{}
 	for _, machine := range machines {
-		secret, err := p.secretsCache.Get(machine.Namespace, PlanSecretFromMachine(machine))
+		secret, err := p.secretsCache.Get(machine.Namespace, PlanSecretFromBootstrapName(machine.Spec.Bootstrap.ConfigRef.Name))
 		if apierror.IsNotFound(err) {
 			continue
 		} else if err != nil {
@@ -133,13 +145,22 @@ func (p *PlanStore) getSecrets(machines []*capi.Machine) (map[string]*corev1.Sec
 	return result, nil
 }
 
+func isRKEBootstrap(machine *capi.Machine) bool {
+	return machine.Spec.Bootstrap.ConfigRef != nil &&
+		machine.Spec.Bootstrap.ConfigRef.Kind == "RKEBootstrap"
+}
+
 func (p *PlanStore) UpdatePlan(machine *capi.Machine, plan plan.NodePlan) error {
 	data, err := json.Marshal(plan)
 	if err != nil {
 		return err
 	}
 
-	secret, err := p.secrets.Get(machine.Namespace, PlanSecretFromMachine(machine), metav1.GetOptions{})
+	if !isRKEBootstrap(machine) {
+		return fmt.Errorf("machine %s/%s is not using RKEBootstrap", machine.Namespace, machine.Name)
+	}
+
+	secret, err := p.secrets.Get(machine.Namespace, PlanSecretFromBootstrapName(machine.Spec.Bootstrap.ConfigRef.Name), metav1.GetOptions{})
 	if err != nil {
 		return err
 	}

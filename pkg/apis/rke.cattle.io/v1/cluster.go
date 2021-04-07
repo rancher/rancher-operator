@@ -16,10 +16,9 @@ type RKECluster struct {
 }
 
 type RKEClusterStatus struct {
-	Conditions             []genericcondition.GenericCondition `json:"conditions,omitempty"`
-	Ready                  bool                                `json:"ready,omitempty"`
-	ObservedGeneration     int64                               `json:"observedGeneration"`
-	ClusterStateSecretName string                              `json:"clusterStateSecretName,omitempty"`
+	Conditions         []genericcondition.GenericCondition `json:"conditions,omitempty"`
+	Ready              bool                                `json:"ready,omitempty"`
+	ObservedGeneration int64                               `json:"observedGeneration"`
 }
 
 type RKEClusterSpecCommon struct {
@@ -34,13 +33,8 @@ type RKESystemConfig struct {
 }
 
 type RKEClusterSpec struct {
-	RKEClusterSpecCommon
-
 	// Not used in anyway, just here to make cluster-api happy
-	ControlPlaneEndpoint      *Endpoint `json:"controlPlaneEndpoint,omitempty"`
-	KubernetesVersion         string    `json:"kubernetesVersion,omitempty"`
-	CloudCredentialSecretName string    `json:"cloudCredentialSecretName,omitempty"`
-	ManagementClusterName     string    `json:"managementClusterName,omitempty" wrangler:"required"`
+	ControlPlaneEndpoint *Endpoint `json:"controlPlaneEndpoint,omitempty"`
 }
 
 type ClusterUpgradeStrategy struct {

@@ -7,7 +7,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rancher/rancher-operator/pkg/clients"
 	"github.com/rancher/rancher-operator/pkg/configserver"
-	"github.com/rancher/rancher-operator/pkg/controllers/rke/machine"
+	"github.com/rancher/rancher-operator/pkg/controllers/rke/bootstrap"
 	mgmtcontrollers "github.com/rancher/rancher-operator/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/steve/pkg/aggregation"
 )
@@ -28,7 +28,7 @@ func Register(ctx context.Context, systemNamespace string, clients *clients.Clie
 
 func InstallHandler(settings mgmtcontrollers.SettingCache) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		content, err := machine.InstallScript(settings)
+		content, err := bootstrap.InstallScript(settings)
 		if err != nil {
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 			return

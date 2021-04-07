@@ -284,6 +284,11 @@ func (in *RKEConfig) DeepCopyInto(out *RKEConfig) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.InfrastructureRef != nil {
+		in, out := &in.InfrastructureRef, &out.InfrastructureRef
+		*out = new(corev1.ObjectReference)
+		**out = **in
+	}
 	return
 }
 

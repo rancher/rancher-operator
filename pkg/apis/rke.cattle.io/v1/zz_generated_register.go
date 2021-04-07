@@ -31,7 +31,7 @@ var (
 	RKEBootstrapResourceName         = "rkebootstraps"
 	RKEBootstrapTemplateResourceName = "rkebootstraptemplates"
 	RKEClusterResourceName           = "rkeclusters"
-	RKEControlPlanResourceName       = "rkecontrolplans"
+	RKEControlPlaneResourceName      = "rkecontrolplanes"
 	UnmanagedMachineResourceName     = "unmanagedmachines"
 )
 
@@ -62,8 +62,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&RKEBootstrapTemplateList{},
 		&RKECluster{},
 		&RKEClusterList{},
-		&RKEControlPlan{},
-		&RKEControlPlanList{},
+		&RKEControlPlane{},
+		&RKEControlPlaneList{},
 		&UnmanagedMachine{},
 		&UnmanagedMachineList{},
 	)

@@ -136,6 +136,8 @@ spec:
                       version:
                         nullable: true
                         type: string
+                    required:
+                    - nodegroupName
                     type: object
                   nullable: true
                   type: array

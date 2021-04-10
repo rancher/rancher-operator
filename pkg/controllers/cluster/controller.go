@@ -2,9 +2,11 @@ package cluster
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/rancher/norman/types/convert"
 	v1 "github.com/rancher/rancher-operator/pkg/apis/rancher.cattle.io/v1"
 	"github.com/rancher/rancher-operator/pkg/clients"
@@ -24,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
@@ -321,4 +324,27 @@ func (h *handler) getServerURLAndCA() (string, string, error) {
 	}
 
 	return serverURL, ca, nil
+}
+
+func GeneratePatch(old, new *v3.Cluster) ([]byte, error) {
+	oldData, err := json.Marshal(old)
+	if err != nil {
+		return nil, err
+	}
+
+	newData, err := json.Marshal(new)
+	if err != nil {
+		return nil, err
+	}
+
+	return jsonpatch.CreateMergePatch(oldData, newData)
+}
+
+func PatchV3Cluster(client mgmtcontrollers.ClusterClient, old, new *v3.Cluster) (*v3.Cluster, error) {
+	patch, err := GeneratePatch(old, new)
+	if err != nil {
+		return old, err
+	}
+
+	return client.Patch(new.Name, types.MergePatchType, patch)
 }

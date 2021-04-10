@@ -71,7 +71,7 @@ func (h *handler) claimCluster(cluster *v1.Cluster, status v1.ClusterStatus) (*v
 		}
 		updated.Labels[claimedLabelName] = cluster.Name
 		updated.Labels[claimedLabelNamespace] = cluster.Namespace
-		return h.rclusters.Update(updated)
+		return PatchV3Cluster(h.rclusters, available, updated)
 	}
 
 	if len(available) == 0 {

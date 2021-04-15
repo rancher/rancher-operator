@@ -125,6 +125,7 @@ func (in *ClusterSpec) DeepCopyInto(out *ClusterSpec) {
 		**out = **in
 	}
 	in.RancherValues.DeepCopyInto(&out.RancherValues)
+	out.LocalClusterAuthEndpoint = in.LocalClusterAuthEndpoint
 	return
 }
 

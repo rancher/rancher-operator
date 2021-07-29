@@ -10,6 +10,7 @@ replace (
 require (
 	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/go-logr/logr v0.3.0
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/gorilla/mux v1.7.3
 	github.com/rancher/fleet/pkg/apis v0.0.0-20210225010648-40ee92df4aea
 	github.com/rancher/lasso v0.0.0-20210407025055-18a00567c734

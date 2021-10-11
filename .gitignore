@@ -1,6 +1,6 @@
 /.dapper
 /.cache
-/bin
+/package/bin
 /build
 /dist
 *.swp

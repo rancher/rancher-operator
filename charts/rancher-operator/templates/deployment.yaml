@@ -11,6 +11,10 @@ spec:
       labels:
         app: rancher-operator
     spec:
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
       - env:
         - name: STAMP

@@ -2929,6 +2929,9 @@ spec:
                     ingressBackend:
                       nullable: true
                       type: string
+                    ingressWebhook:
+                      nullable: true
+                      type: string
                     kubedns:
                       nullable: true
                       type: string
